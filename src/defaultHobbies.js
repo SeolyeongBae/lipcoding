@@ -27,8 +27,19 @@ export const DEFAULT_HOBBIES = [
     id: "drawing",
     name: "🎨 그림 (드로잉/크로키)",
     aliases: ["그림", "드로잉", "크로키", "drawing"],
-    tasks: ["아이패드 드로잉", "크로키"],
-    bgmQueries: ["침착맨 라디오", "비주류 초대석", "drum and bass playlist"],
+    tasks: [
+      "아이패드 드로잉",
+      "크로키",
+      "좋아하는 그림 모작",
+      "자유롭게 스케치하기",
+      "아무 생각 없이 선 긋기",
+    ],
+    bgmQueries: [
+      "침착맨 라디오",
+      "비주류 초대석",
+      "drum and bass playlist",
+      "lofi drawing playlist",
+    ],
     minMin: 30,
     fixedMin: null,
     note: "아이패드 드로잉 or 크로키 / BGM 틀어놓고",
@@ -39,7 +50,11 @@ export const DEFAULT_HOBBIES = [
     name: "📚 공부/독서",
     aliases: ["공부", "독서", "study", "reading"],
     tasks: ["프로그래머의 뇌", "소프트웨어 엔지니어링 가이드북", "쿠버네티스"],
-    bgmQueries: ["빗소리 공부 음악 가사없음", "오케스트라 집중 공부 음악", "rain ambience study music no lyrics"],
+    bgmQueries: [
+      "빗소리 공부 음악 가사없음",
+      "오케스트라 집중 공부 음악",
+      "rain ambience study music no lyrics",
+    ],
     minMin: 30,
     fixedMin: null,
     note: "프로그래머의 뇌 · SW엔지니어링 가이드북 · 쿠버네티스",
@@ -107,12 +122,14 @@ export function normalizeHobby(hobby, fallback = {}) {
         : [],
     tasks,
     bgmQueries,
-    minMin: Number.isFinite(hobby.minMin) ? hobby.minMin : fallback.minMin ?? 0,
+    minMin: Number.isFinite(hobby.minMin)
+      ? hobby.minMin
+      : (fallback.minMin ?? 0),
     fixedMin:
       hobby.fixedMin === null || Number.isFinite(hobby.fixedMin)
         ? hobby.fixedMin
-        : fallback.fixedMin ?? null,
-    note: typeof hobby.note === "string" ? hobby.note : fallback.note ?? "",
+        : (fallback.fixedMin ?? null),
+    note: typeof hobby.note === "string" ? hobby.note : (fallback.note ?? ""),
     showVideos:
       typeof hobby.showVideos === "boolean"
         ? hobby.showVideos

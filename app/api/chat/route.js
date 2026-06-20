@@ -1,4 +1,7 @@
 import { CopilotClient, defineTool } from "@github/copilot-sdk";
+import { configureCopilotCliPath } from "../../../src/copilotCliPath";
+
+configureCopilotCliPath();
 
 // Conditions for mock weather tool
 const CONDITIONS = ["sunny", "cloudy", "rainy", "partly cloudy"];

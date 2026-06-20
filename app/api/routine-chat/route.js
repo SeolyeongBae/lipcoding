@@ -1,8 +1,13 @@
 import { CopilotClient } from "@github/copilot-sdk";
+import { configureCopilotCliPath } from "../../../src/copilotCliPath";
+
+configureCopilotCliPath();
 
 const SYSTEM_PROMPT = [
   "너는 개인 루틴 앱의 따뜻한 하루 코치야.",
   "항상 한국어로 답하고, 사용자의 남은 자유시간과 취미 목록을 바탕으로 자연스러운 하루 루틴을 추천해.",
+  "출근 전 자유시간이 0분이면 절대 출근 전 여유가 있다고 말하지 말고, 아침에는 준비에 집중하라고 안내해.",
+  "남은 시간이 취미 최소 시간보다 짧으면 억지로 루틴을 끼워 넣지 말고 쉬운 준비나 휴식을 제안해.",
   "말투는 다정하고 개인적이며 응원하는 느낌으로 유지해.",
   "응답은 최대 3문장으로 짧고 명확하게 작성해.",
 ].join(" ");
@@ -31,7 +36,7 @@ function stripEmojiPrefix(name = "") {
   return name.replace(/^[^\p{L}\p{N}]+/u, "").trim() || name;
 }
 
-function fallbackRecommendation(context = {}) {
+export function fallbackRecommendation(context = {}) {
   const hobbies = Array.isArray(context.hobbies) ? context.hobbies : [];
   const preMin = Number.isFinite(context.preMin) ? context.preMin : 0;
   const postMin = Number.isFinite(context.postMin) ? context.postMin : 0;
@@ -44,7 +49,19 @@ function fallbackRecommendation(context = {}) {
   const secondPick = picks[1] || FALLBACK_ACTIVITY_NAMES[1];
   const eveningPick = picks[2] || FALLBACK_ACTIVITY_NAMES[4];
 
-  return `오늘 출근 전 ${formatMin(preMin)} 정도 여유가 있네요! ${firstPick}${preMin >= 60 ? "부터" : "를"} 가볍게 시작하고 ${secondPick}까지 이어가면 하루 리듬이 예쁘게 잡힐 것 같아요. ${postMin > 0 ? `퇴근 후 ${formatMin(postMin)}에는 ${eveningPick}처럼 편하게 몰입할 시간을 남겨두면 좋겠어요 😊` : "오늘도 무리하지 말고 작은 루틴 하나만 챙겨봐요 😊"}`;
+  if (preMin <= 0 && postMin <= 0) {
+    return "오늘은 출근 전에도 퇴근 후에도 남는 자유시간이 거의 없어요. 루틴을 억지로 넣기보다 내일 할 일을 하나만 골라두고 푹 쉬어도 충분해요 😊";
+  }
+
+  if (preMin <= 0) {
+    return `오늘 출근 전에는 여유 시간이 없으니 아침엔 준비에 집중해도 좋아요. 퇴근 후 ${formatMin(postMin)}에는 ${firstPick}처럼 바로 시작하기 쉬운 루틴 하나만 가볍게 챙겨봐요 😊`;
+  }
+
+  if (postMin <= 0) {
+    return `오늘 출근 전 ${formatMin(preMin)}이 남아 있어요. ${firstPick}${preMin >= 60 ? "부터" : "를"} 가볍게 시작하되, 퇴근 후엔 무리해서 더 채우지 않아도 괜찮아요 😊`;
+  }
+
+  return `오늘 출근 전 ${formatMin(preMin)}이 남아 있어요. ${firstPick}${preMin >= 60 ? "부터" : "를"} 가볍게 시작하고, 퇴근 후 ${formatMin(postMin)}에는 ${secondPick || eveningPick}처럼 편하게 이어가면 좋아요 😊`;
 }
 
 function emit(controller, encoder, data) {

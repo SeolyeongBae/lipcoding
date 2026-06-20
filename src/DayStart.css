@@ -16,8 +16,15 @@
 
 /* ── Welcome ── */
 .ds-welcome {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   text-align: center;
   animation: fadeIn 0.5s ease;
+}
+
+.ds-welcome .ds-page-header__link {
+  margin-bottom: 0.85rem;
 }
 
 .ds-emoji {
@@ -118,7 +125,7 @@
 /* ── Time grid ── */
 .ds-time-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   gap: 0.6rem;
   max-height: 320px;
   overflow-y: auto;
@@ -127,21 +134,108 @@
   border-radius: 14px;
 }
 
+.ds-work-preview {
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(255, 107, 53, 0.16);
+  border-radius: 18px;
+  padding: 0.9rem;
+  margin-bottom: 0.9rem;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.06);
+}
+
+.ds-work-preview__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.55rem;
+  font-size: 0.78rem;
+  color: #777;
+}
+
+.ds-work-preview__header strong {
+  color: #fd79a8;
+}
+
+.ds-work-preview__bar {
+  display: flex;
+  height: 24px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #f6f6f6;
+}
+
+.ds-work-preview__block {
+  display: block;
+  min-width: 0;
+}
+
+.ds-work-preview__block--work {
+  flex: 1 1 72%;
+  background: linear-gradient(90deg, #fd79a8, #ff9bbd);
+}
+
+.ds-work-preview__block--free {
+  flex: 0 0 28%;
+  background: linear-gradient(90deg, #74b9ff, #a29bfe);
+}
+
+.ds-work-preview p {
+  margin-top: 0.55rem;
+  margin-bottom: 0;
+  color: #666;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
 .ds-time-btn {
   background: #fff;
   border: 2px solid #e0e0e0;
   border-radius: 10px;
-  padding: 0.7rem 0.5rem;
+  padding: 0.75rem;
   font-size: 0.9rem;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.15s;
   color: #2d2d2d;
+  display: grid;
+  gap: 0.35rem;
+  text-align: left;
 }
 
 .ds-time-btn:hover {
   border-color: #ff6b35;
   background: #fff5f0;
+}
+
+.ds-time-btn__label,
+.ds-time-btn__meta {
+  display: block;
+}
+
+.ds-time-btn__label {
+  font-weight: 800;
+}
+
+.ds-time-btn__meta {
+  color: #777;
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+
+.ds-time-btn__bar {
+  display: block;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #eef2f6;
+}
+
+.ds-time-btn__bar span {
+  display: block;
+  height: 100%;
+  min-width: 8px;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #fd79a8, #ff6b35);
 }
 
 /* ── Results ── */
@@ -332,6 +426,48 @@
 .ds-time-card__detail {
   font-size: 0.75rem;
   color: #aaa;
+}
+
+/* ── Plan summary ── */
+.ds-plan-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  background: #fff;
+  border-radius: 16px;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+  border-left: 4px solid #ff6b35;
+}
+
+.ds-plan-summary__label {
+  font-size: 0.78rem;
+  color: #888;
+  font-weight: 700;
+  margin-bottom: 0.25rem;
+}
+
+.ds-plan-summary__value {
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: #2d2d2d;
+  white-space: nowrap;
+}
+
+.ds-plan-summary__value span {
+  font-size: 0.9rem;
+  color: #aaa;
+  font-weight: 600;
+}
+
+.ds-plan-summary p {
+  flex: 1;
+  font-size: 0.9rem;
+  color: #555;
+  line-height: 1.5;
+  text-align: right;
 }
 
 /* ── Hobbies ── */
@@ -1190,7 +1326,9 @@
   border-radius: 10px;
   border: 1.5px solid #f0f0f0;
   width: 100%;
-  transition: border-color 0.15s, background 0.15s;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
 }
 
 .ds-task-pick-label:hover {
@@ -1218,6 +1356,8 @@
 
 /* ── Custom task input ── */
 .ds-task-pick-custom {
+  display: flex;
+  gap: 0.5rem;
   margin-bottom: 0.75rem;
 }
 
@@ -1242,6 +1382,23 @@
   color: #bbb;
 }
 
+.ds-task-pick-add {
+  flex-shrink: 0;
+  padding: 0 0.85rem;
+  border: none;
+  border-radius: 10px;
+  background: #2d2d2d;
+  color: #fff;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.ds-task-pick-add:disabled {
+  background: #ddd;
+  cursor: not-allowed;
+}
+
 /* ── Add tasks button ── */
 .ds-task-add-btn {
   width: 100%;
@@ -1261,6 +1418,13 @@
   background: #e85c2a;
   transform: translateY(-1px);
   box-shadow: 0 5px 15px rgba(255, 107, 53, 0.4);
+}
+
+.ds-task-add-btn:disabled {
+  background: #ddd;
+  box-shadow: none;
+  cursor: not-allowed;
+  transform: none;
 }
 
 .ds-task-add-btn:active {
@@ -1333,7 +1497,7 @@
   max-width: 420px;
   width: 100%;
   position: relative;
-  box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
 }
 
 .ds-modal__close {
@@ -1393,14 +1557,21 @@
   border-radius: 16px;
   padding: 1.25rem 1.5rem;
   margin-top: 1.5rem;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
 }
 
 .ds-today-log h3 {
   font-size: 1rem;
   font-weight: 700;
   color: #333;
-  margin-bottom: 0.75rem;
+  margin-bottom: 0.35rem;
+}
+
+.ds-today-log__guide {
+  font-size: 0.88rem;
+  color: #666;
+  line-height: 1.5;
+  margin-bottom: 0.8rem;
 }
 
 .ds-today-log__empty {
@@ -1426,6 +1597,24 @@
   border-bottom: none;
 }
 
+.ds-today-log__item--done {
+  background: #f0faf0;
+  border-color: #c8e6c9;
+}
+
+.ds-today-log__item--done .ds-today-log__video {
+  color: #aaa;
+  text-decoration: line-through;
+}
+
+.ds-today-log__main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
 .ds-today-log__hobby {
   font-size: 0.85rem;
   font-weight: 700;
@@ -1439,6 +1628,33 @@
 .ds-today-log__video {
   font-size: 0.9rem;
   color: #555;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ds-today-log__duration {
+  font-size: 0.82rem;
+  color: #ff6b35;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.ds-today-log__remove {
+  width: 1.6rem;
+  height: 1.6rem;
+  border: none;
+  border-radius: 50%;
+  background: #f6f6f6;
+  color: #aaa;
+  cursor: pointer;
+  font-size: 1.1rem;
+  line-height: 1;
+  transition: all 0.15s;
+}
+
+.ds-today-log__remove:hover {
+  background: #fff0ea;
+  color: #ff6b35;
 }
 
 /* ── Video card as button ── */

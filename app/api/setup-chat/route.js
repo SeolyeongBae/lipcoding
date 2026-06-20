@@ -1,4 +1,7 @@
 import { CopilotClient } from "@github/copilot-sdk";
+import { configureCopilotCliPath } from "../../../src/copilotCliPath";
+
+configureCopilotCliPath();
 
 let client = null;
 let session = null;
@@ -17,16 +20,19 @@ const SETUP_SYSTEM_MESSAGE = `
 `;
 
 function summarizeHobbies(hobbies = []) {
-  if (!Array.isArray(hobbies) || hobbies.length === 0) return "아직 선택된 취미 없음";
+  if (!Array.isArray(hobbies) || hobbies.length === 0)
+    return "아직 선택된 취미 없음";
 
   return hobbies
     .map((hobby) => {
-      const tasks = Array.isArray(hobby.tasks) && hobby.tasks.length > 0
-        ? hobby.tasks.join(", ")
-        : "미정";
-      const bgm = Array.isArray(hobby.bgmQueries) && hobby.bgmQueries.length > 0
-        ? hobby.bgmQueries.join(", ")
-        : "없음";
+      const tasks =
+        Array.isArray(hobby.tasks) && hobby.tasks.length > 0
+          ? hobby.tasks.join(", ")
+          : "미정";
+      const bgm =
+        Array.isArray(hobby.bgmQueries) && hobby.bgmQueries.length > 0
+          ? hobby.bgmQueries.join(", ")
+          : "없음";
       return `- ${hobby.name} | 할 일: ${tasks} | BGM: ${bgm}`;
     })
     .join("\n");
@@ -60,6 +66,59 @@ ${summarizeHobbies(context.selectedHobbies)}
 - 단계가 "취미 선택"이면 취미 후보를, "세부 할 일 수집"이면 구체적인 할 일을, "BGM 수집"이면 유튜브/BGM 검색어를 제안하세요.
 - 단계가 "설정 마무리"이면 요약과 저장 안내에 집중하세요.
 `;
+}
+
+function findCurrentHobby(context = {}) {
+  const hobbies = Array.isArray(context.selectedHobbies)
+    ? context.selectedHobbies
+    : [];
+
+  return (
+    hobbies.find((hobby) => hobby.name === context.currentHobby) ?? hobbies[0]
+  );
+}
+
+function bracketTags(items = []) {
+  return items
+    .filter(Boolean)
+    .slice(0, 3)
+    .map((item) => `[${item}]`)
+    .join(" ");
+}
+
+export function fallbackSetupReply(message, context = {}) {
+  const currentHobby = findCurrentHobby(context);
+  const hobbyName = context.currentHobby ?? currentHobby?.name ?? message;
+
+  if (context.stage === "select-hobby") {
+    const taskTags = bracketTags(
+      currentHobby?.tasks?.length
+        ? currentHobby.tasks
+        : ["10분만 하기", "기본 루틴", "가볍게 시작"],
+    );
+
+    return `좋아요! ${hobbyName} 루틴부터 정리해볼게요. 먼저 어떤 세부 할 일을 넣을까요?\n\n${taskTags}`;
+  }
+
+  if (context.stage === "collect-tasks") {
+    const tasks =
+      Array.isArray(context.latestTasks) && context.latestTasks.length > 0
+        ? context.latestTasks.join(", ")
+        : message;
+    const bgmTags = bracketTags(
+      currentHobby?.bgmQueries?.length
+        ? currentHobby.bgmQueries
+        : ["집중 음악", "잔잔한 플레이리스트", "타이머 영상"],
+    );
+
+    return `좋아요, ${hobbyName} 할 일은 ${tasks}로 잡아둘게요. 할 때 틀어둘 BGM이나 유튜브 검색어도 골라볼까요?\n\n${bgmTags}`;
+  }
+
+  if (context.nextHobby) {
+    return `좋아요, ${hobbyName} BGM까지 저장해둘게요. 다음은 ${context.nextHobby}에서 어떤 세부 할 일을 할지 정해볼까요?\n\n[기본 루틴] [10분만 하기] [가볍게 시작]`;
+  }
+
+  return `좋아요, ${hobbyName} 설정이 정리됐어요. 이제 저장하고 시작하기를 눌러 오늘 루틴으로 넘어가면 돼요.`;
 }
 
 async function getSession() {
@@ -118,8 +177,12 @@ export async function POST(request) {
         await activeSession.sendAndWait({
           prompt: buildPrompt(message, context),
         });
-      } catch (err) {
-        send({ type: "error", message: err.message });
+      } catch {
+        client = null;
+        session = null;
+        initPromise = null;
+        send({ type: "delta", content: fallbackSetupReply(message, context) });
+        send({ type: "done" });
       } finally {
         unsubscribers.forEach((unsubscribe) => unsubscribe?.());
         controller.close();

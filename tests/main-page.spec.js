@@ -55,14 +55,14 @@ test.describe("main page routine flow", () => {
       });
     });
 
-    await page.goto("http://localhost:3000");
+    await page.goto("/");
     await page.evaluate(() => {
       localStorage.clear();
     });
     await page.reload();
   });
 
-  test("loads, recommends, and logs a selected video", async ({ page }) => {
+  test("loads, recommends, and adds a selected video to today's plan", async ({ page }) => {
     await expect(page.getByText("좋은 아침이에요!")).toBeVisible();
     await expect(
       page.getByRole("link", { name: "⚙️ 취미 설정" }),
@@ -81,7 +81,8 @@ test.describe("main page routine flow", () => {
     await guitarButtons.first().click();
 
     await expect(page.getByText("이번에 해볼 것")).toBeVisible();
-    await expect(page.getByText("• 크로매틱 연습")).toBeVisible();
+    await expect(page.getByLabel("크로매틱 연습")).toBeChecked();
+    await expect(page.getByRole("button", { name: /\+ 선택한 1개 활동/ })).toBeVisible();
     await expect(
       page.getByRole("button", { name: "60fps 메트로놈", exact: true }),
     ).toBeVisible();
@@ -92,11 +93,17 @@ test.describe("main page routine flow", () => {
     await expect(page.getByTestId("today-log")).toBeVisible();
 
     await page.getByRole("button", { name: /60fps 메트로놈 120bpm/ }).click();
-    await expect(page.getByRole("dialog", { name: /기타 연습/ })).toBeVisible();
-    await page.getByRole("button", { name: /시작하기/ }).click();
+    const videoDialog = page.getByRole("dialog", { name: /기타 연습/ });
+    await expect(videoDialog).toBeVisible();
+    await videoDialog.getByRole("button", { name: /오늘 플랜에 담기/ }).click();
 
     await expect(page.getByTestId("today-log").getByText("60fps 메트로놈 120bpm")).toBeVisible();
     await expect(page.getByTestId("today-log").getByText("🎸 기타 연습")).toBeVisible();
+    await expect(page.getByText("오늘 담은 시간")).toBeVisible();
+    await expect(
+      page.getByTestId("today-log").getByText("30분", { exact: true }),
+    ).toBeVisible();
+    await expect(guitarButtons.first()).toBeVisible();
 
     const storedLog = await page.evaluate(() =>
       JSON.parse(localStorage.getItem("todayLog")),
@@ -104,6 +111,8 @@ test.describe("main page routine flow", () => {
     expect(storedLog.date).toBe("2026-06-20");
     expect(storedLog.entries).toHaveLength(1);
     expect(storedLog.entries[0].hobbyId).toBe("guitar");
+    expect(storedLog.entries[0].taskLabels).toEqual(["크로매틱 연습"]);
     expect(storedLog.entries[0].videoId).toBe("abc123");
+    expect(storedLog.entries[0].durationMin).toBe(30);
   });
 });
