@@ -1,0 +1,465 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+.daystart {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 50%, #ffeaa7 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  padding: 1.5rem;
+}
+
+/* ── Welcome ── */
+.ds-welcome {
+  text-align: center;
+  animation: fadeIn 0.5s ease;
+}
+
+.ds-emoji {
+  font-size: 5rem;
+  margin-bottom: 1rem;
+}
+
+.ds-welcome h1 {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #2d2d2d;
+  margin-bottom: 0.5rem;
+}
+
+.ds-welcome p {
+  font-size: 1.1rem;
+  color: #555;
+  margin-bottom: 2rem;
+}
+
+/* ── Buttons ── */
+.ds-btn {
+  border: none;
+  border-radius: 14px;
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: 600;
+  transition:
+    transform 0.15s,
+    box-shadow 0.15s;
+}
+
+.ds-btn:active {
+  transform: scale(0.97);
+}
+
+.ds-btn--primary {
+  background: #ff6b35;
+  color: #fff;
+  padding: 0.9rem 2.5rem;
+  font-size: 1.15rem;
+  box-shadow: 0 4px 15px rgba(255, 107, 53, 0.4);
+}
+
+.ds-btn--primary:hover {
+  box-shadow: 0 6px 20px rgba(255, 107, 53, 0.5);
+  transform: translateY(-1px);
+}
+
+/* ── Steps ── */
+.ds-step {
+  text-align: center;
+  max-width: 480px;
+  width: 100%;
+  animation: fadeIn 0.4s ease;
+}
+
+.ds-step__question {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: #2d2d2d;
+  margin-bottom: 0.6rem;
+}
+
+.ds-step__sub {
+  font-size: 0.95rem;
+  color: #666;
+  margin-bottom: 1.8rem;
+}
+
+.ds-choices {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.ds-choice-btn {
+  background: #fff;
+  border: 2px solid #e0e0e0;
+  border-radius: 14px;
+  padding: 1rem 2rem;
+  font-size: 1.05rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  color: #2d2d2d;
+  min-width: 160px;
+}
+
+.ds-choice-btn:hover {
+  border-color: #ff6b35;
+  background: #fff5f0;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* ── Time grid ── */
+.ds-time-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 0.6rem;
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 0.5rem;
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: 14px;
+}
+
+.ds-time-btn {
+  background: #fff;
+  border: 2px solid #e0e0e0;
+  border-radius: 10px;
+  padding: 0.7rem 0.5rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  color: #2d2d2d;
+}
+
+.ds-time-btn:hover {
+  border-color: #ff6b35;
+  background: #fff5f0;
+}
+
+/* ── Results ── */
+.ds-result {
+  width: 100%;
+  max-width: 720px;
+  animation: fadeIn 0.4s ease;
+}
+
+.ds-result__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.2rem;
+}
+
+.ds-result__header h2 {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: #2d2d2d;
+}
+
+.ds-reset-btn {
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  padding: 0.4rem 0.9rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+  color: #555;
+  transition: all 0.15s;
+}
+
+.ds-reset-btn:hover {
+  background: #fff;
+}
+
+/* ── Timeline ── */
+.ds-timeline {
+  background: #fff;
+  border-radius: 14px;
+  padding: 1rem 1.25rem 0.75rem;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+  margin-bottom: 1.2rem;
+}
+
+.ds-timeline__bar {
+  position: relative;
+  height: 36px;
+  border-radius: 10px;
+  overflow: visible;
+  display: flex;
+  background: #f0f0f0;
+}
+
+.ds-timeline__seg {
+  height: 100%;
+  transition: opacity 0.15s;
+  position: relative;
+}
+.ds-timeline__seg:first-child { border-radius: 10px 0 0 10px; }
+.ds-timeline__seg:last-child  { border-radius: 0 10px 10px 0; }
+.ds-timeline__seg:only-child  { border-radius: 10px; }
+.ds-timeline__seg:hover       { opacity: 0.8; }
+
+.ds-timeline__now {
+  position: absolute;
+  top: -6px;
+  bottom: -6px;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: none;
+}
+
+.ds-timeline__now-line {
+  width: 2px;
+  flex: 1;
+  background: #ff6b35;
+  border-radius: 2px;
+}
+
+.ds-timeline__now-label {
+  font-size: 0.7rem;
+  color: #ff6b35;
+  font-weight: 700;
+  margin-top: 2px;
+  white-space: nowrap;
+}
+
+.ds-timeline__ticks {
+  position: relative;
+  height: 22px;
+  margin-top: 6px;
+}
+
+.ds-timeline__ticks span {
+  position: absolute;
+  transform: translateX(-50%);
+  font-size: 0.7rem;
+  color: #aaa;
+  white-space: nowrap;
+}
+
+.ds-timeline__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  margin-top: 0.75rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid #f0f0f0;
+}
+
+.ds-timeline__legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.78rem;
+  color: #555;
+}
+
+.ds-timeline__legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+
+.ds-time-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+@media (max-width: 560px) {
+  .ds-time-cards {
+    grid-template-columns: 1fr 1fr;
+  }
+  .ds-time-card--total {
+    grid-column: 1 / -1;
+  }
+}
+
+.ds-time-card {
+  background: #fff;
+  border-radius: 14px;
+  padding: 1rem;
+  text-align: center;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+}
+
+.ds-time-card--pre {
+  border-top: 4px solid #74b9ff;
+}
+
+.ds-time-card--post {
+  border-top: 4px solid #a29bfe;
+}
+
+.ds-time-card--total {
+  border-top: 4px solid #ff6b35;
+}
+
+.ds-time-card__label {
+  font-size: 0.8rem;
+  color: #888;
+  margin-bottom: 0.4rem;
+  font-weight: 500;
+}
+
+.ds-time-card__value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #2d2d2d;
+  margin-bottom: 0.25rem;
+}
+
+.ds-time-card__detail {
+  font-size: 0.75rem;
+  color: #aaa;
+}
+
+/* ── Hobbies ── */
+.ds-hobbies h3 {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #2d2d2d;
+  margin-bottom: 1rem;
+}
+
+.ds-hobby-section {
+  margin-bottom: 1.2rem;
+}
+
+.ds-hobby-section__title {
+  font-size: 0.85rem;
+  color: #666;
+  font-weight: 600;
+  margin-bottom: 0.6rem;
+  padding: 0.3rem 0.7rem;
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 20px;
+  display: inline-block;
+}
+
+.ds-hobby-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.ds-hobby-btn {
+  background: #fff;
+  border: 2px solid #e0e0e0;
+  border-radius: 20px;
+  padding: 0.5rem 1rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  color: #2d2d2d;
+}
+
+.ds-hobby-btn:hover {
+  border-color: #ff6b35;
+  background: #fff5f0;
+}
+
+.ds-hobby-btn--active {
+  background: #ff6b35;
+  border-color: #ff6b35;
+  color: #fff;
+}
+
+.ds-hobby-empty {
+  color: #999;
+  font-size: 0.9rem;
+  padding: 0.5rem;
+}
+
+/* ── Videos ── */
+.ds-videos {
+  margin-top: 1.5rem;
+  animation: fadeIn 0.3s ease;
+}
+
+.ds-videos h3 {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #2d2d2d;
+  margin-bottom: 0.8rem;
+}
+
+.ds-loading {
+  text-align: center;
+  color: #888;
+  padding: 1.5rem;
+  font-size: 0.95rem;
+}
+
+.ds-video-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 0.75rem;
+}
+
+.ds-video-card {
+  background: #fff;
+  border-radius: 12px;
+  overflow: hidden;
+  text-decoration: none;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  transition: all 0.15s;
+}
+
+.ds-video-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.15);
+}
+
+.ds-video-thumb {
+  width: 100%;
+  aspect-ratio: 16/9;
+  object-fit: cover;
+  display: block;
+}
+
+.ds-video-info {
+  padding: 0.6rem 0.75rem;
+}
+
+.ds-video-title {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #2d2d2d;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin-bottom: 0.25rem;
+  line-height: 1.4;
+}
+
+.ds-video-channel {
+  font-size: 0.75rem;
+  color: #888;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

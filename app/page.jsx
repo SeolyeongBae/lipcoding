@@ -1,7 +1,7 @@
 "use client";
 
-import WeatherAssistant from "../src/WeatherAssistant";
+import DayStart from "../src/DayStart";
 
 export default function Home() {
-  return <WeatherAssistant />;
+  return <DayStart />;
 }

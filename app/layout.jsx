@@ -1,8 +1,8 @@
 import "./globals.css";
 
 export const metadata = {
-  title: "Weather Assistant",
-  description: "Powered by GitHub Copilot SDK",
+  title: "하루 시작",
+  description: "오늘 자유시간 계산 & 취미 추천",
 };
 
 export default function RootLayout({ children }) {
