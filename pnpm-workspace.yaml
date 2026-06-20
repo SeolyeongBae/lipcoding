@@ -1,4 +1,2 @@
 allowBuilds:
   esbuild: false
-settings:
-  minimumReleaseAge: "0"
