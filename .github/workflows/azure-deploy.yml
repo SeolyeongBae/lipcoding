@@ -27,6 +27,8 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install
+        env:
+          npm_config_minimum_release_age: "0"
 
       - name: Run tests
         run: pnpm test:run
