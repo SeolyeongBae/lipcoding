@@ -41,9 +41,30 @@ jobs:
           cp -r public .next/standalone/public || true
           cp -r .next/static .next/standalone/.next/static || true
 
-      - name: Deploy to Azure Web App
-        uses: azure/webapps-deploy@v3
-        with:
-          app-name: lipcoding-app-svc
-          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
-          package: .next/standalone
+      - name: Zip standalone bundle
+        run: cd .next/standalone && zip -r ../../deploy.zip .
+
+      - name: Deploy via Kudu ZIP API
+        run: |
+          PUBLISH_PROFILE='${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}'
+          USER=$(echo "$PUBLISH_PROFILE" | grep -oP 'publishMethod="ZipDeploy"[^/]*/>\s*<[^>]*userName="\K[^"]+' || \
+                 echo "$PUBLISH_PROFILE" | python3 -c "
+          import sys, re
+          xml = sys.stdin.read()
+          m = re.search(r'publishMethod=\"ZipDeploy\"[^>]*userName=\"([^\"]+)\"', xml)
+          print(m.group(1) if m else '')
+          ")
+          PASS=$(echo "$PUBLISH_PROFILE" | python3 -c "
+          import sys, re
+          xml = sys.stdin.read()
+          m = re.search(r'publishMethod=\"ZipDeploy\"[^>]*userPWD=\"([^\"]+)\"', xml)
+          print(m.group(1) if m else '')
+          ")
+          curl -X POST \
+            "https://lipcoding-app-svc.scm.azurewebsites.net/api/zipdeploy?isAsync=false" \
+            -u "$USER:$PASS" \
+            -H "Content-Type: application/octet-stream" \
+            --data-binary @deploy.zip \
+            --fail \
+            --silent \
+            --show-error
