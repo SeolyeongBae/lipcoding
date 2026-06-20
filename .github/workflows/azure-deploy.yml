@@ -40,6 +40,9 @@ jobs:
         run: |
           cp -r public .next/standalone/public || true
           cp -r .next/static .next/standalone/.next/static || true
+          # Add package.json with start script so Oryx detects this as Node.js
+          echo '{"name":"app","version":"1.0.0","scripts":{"start":"node server.js"}}' \
+            > .next/standalone/package.json
           cd .next/standalone && zip -r ../../deploy.zip .
 
       - name: Deploy to Azure Web App
