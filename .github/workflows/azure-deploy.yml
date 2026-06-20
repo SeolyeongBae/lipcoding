@@ -47,8 +47,15 @@ jobs:
           if [ -d .next/server/vendor-chunks ]; then
             cp -r .next/server/vendor-chunks .next/standalone/.next/server/vendor-chunks
           fi
+          # Bundle the @github/copilot CLI: it is spawned dynamically at runtime,
+          # so Next's static file tracer does not include it in the standalone output.
+          if [ -d node_modules/@github ]; then
+            mkdir -p .next/standalone/node_modules/@github
+            cp -r node_modules/@github/. .next/standalone/node_modules/@github/
+          fi
           test -f .next/standalone/server.js
           test -d .next/standalone/.next/server/chunks
+          test -f .next/standalone/node_modules/@github/copilot/npm-loader.js
           # Add package.json with start script so Oryx detects this as Node.js
           echo '{"name":"app","version":"1.0.0","scripts":{"start":"node server.js"}}' \
             > .next/standalone/package.json
@@ -61,7 +68,7 @@ jobs:
         run: |
           for path in node_modules.tar.gz oryx-manifest.toml _del_node_modules; do
             curl -X DELETE \
-              "https://lipcoding-app-svc.scm.azurewebsites.net/api/vfs/site/wwwroot/${path}" \
+              "https://lipcoding-app-svc-v2.scm.azurewebsites.net/api/vfs/site/wwwroot/${path}" \
               --user "${PUBLISH_USER}:${PUBLISH_PASS}" \
               -H "If-Match: *" \
               --silent \
@@ -75,7 +82,7 @@ jobs:
           PUBLISH_PASS: ${{ secrets.AZURE_PUBLISH_PASS }}
         run: |
           curl -X POST \
-            "https://lipcoding-app-svc.scm.azurewebsites.net/api/zipdeploy?isAsync=false&clean=true" \
+            "https://lipcoding-app-svc-v2.scm.azurewebsites.net/api/zipdeploy?isAsync=false&clean=true" \
             --user "${PUBLISH_USER}:${PUBLISH_PASS}" \
             -H "Content-Type: application/octet-stream" \
             --data-binary @deploy.zip \
