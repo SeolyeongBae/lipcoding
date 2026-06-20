@@ -46,10 +46,13 @@ jobs:
           cd .next/standalone && zip -r ../../deploy.zip .
 
       - name: Deploy to Azure Web App via Kudu ZipDeploy
+        env:
+          PUBLISH_USER: ${{ secrets.AZURE_PUBLISH_USER }}
+          PUBLISH_PASS: ${{ secrets.AZURE_PUBLISH_PASS }}
         run: |
           curl -X POST \
             "https://lipcoding-app-svc.scm.azurewebsites.net/api/zipdeploy?isAsync=false" \
-            -u "${{ secrets.AZURE_PUBLISH_USER }}:${{ secrets.AZURE_PUBLISH_PASS }}" \
+            --user "${PUBLISH_USER}:${PUBLISH_PASS}" \
             -H "Content-Type: application/octet-stream" \
             --data-binary @deploy.zip \
             --max-time 300 \
