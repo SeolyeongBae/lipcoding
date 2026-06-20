@@ -1,0 +1,15 @@
+node_modules
+.next
+dist
+deploy.zip
+.git
+.github
+.env*
+*.log
+.copilot-next-dev.log
+test-results
+playwright-report
+.DS_Store
+tests
+docs
+README.md

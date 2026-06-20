@@ -1,4 +1,5 @@
 nodeLinker: hoisted
+minimumReleaseAge: 0
 allowBuilds:
   esbuild: false
   sharp: true
