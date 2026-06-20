@@ -4,31 +4,15 @@
  * Automatically skipped when CLI is not available.
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import { execSync } from 'child_process'
-import os from 'os'
+import { copilotIntegrationEnabled } from './copilotIntegration.js'
 
-// Share auth with the SDK's bundled CLI via COPILOT_HOME
-process.env.COPILOT_HOME = process.env.COPILOT_HOME || `${os.homedir()}/.copilot`
-
-const copilotAvailable = (() => {
-  try {
-    execSync('copilot --version', {
-      stdio: 'pipe',
-      env: { ...process.env, PATH: `${os.homedir()}/.local/bin:${process.env.PATH}` },
-    })
-    return true
-  } catch {
-    return false
-  }
-})()
-
-describe.skipIf(!copilotAvailable)('Step 2: Send Message [integration — needs CLI]', () => {
+describe.skipIf(!copilotIntegrationEnabled)('Step 2: Send Message [integration — needs CLI]', () => {
   let client
   let session
 
   beforeAll(async () => {
-    const { CopilotClient } = await import('@github/copilot-sdk')
-    client = new CopilotClient()
+    const { createCopilotClient } = await import('../src/copilotClient.js')
+    client = createCopilotClient()
     session = await client.createSession({ model: 'auto' })
   }, 60_000)
 
@@ -46,8 +30,8 @@ describe.skipIf(!copilotAvailable)('Step 2: Send Message [integration — needs 
   }, 60_000)
 })
 
-if (!copilotAvailable) {
+if (!copilotIntegrationEnabled) {
   describe('Step 2: Send Message', () => {
-    it.skip('⚠️  Copilot CLI not found — run: ~/.local/bin/copilot login', () => {})
+    it.skip('⚠️  Copilot integration disabled (no CLI auth / running in CI)', () => {})
   })
 }

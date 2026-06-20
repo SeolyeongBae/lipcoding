@@ -6,7 +6,7 @@ set -e
 # ── Configuration ──────────────────────────────────────────────────────────────
 RESOURCE_GROUP="lipcoding-rg"
 LOCATION="eastasia"
-APP_NAME="lipcoding-app"
+APP_NAME="lipcoding-app-svc-v2"
 PLAN_NAME="lipcoding-plan"
 NODE_VERSION="22-lts"
 # ──────────────────────────────────────────────────────────────────────────────

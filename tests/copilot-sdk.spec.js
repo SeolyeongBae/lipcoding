@@ -70,7 +70,7 @@ test.describe("Copilot SDK browser integration", () => {
       page.getByText("좋아요! 기타 루틴부터 정리해볼게요."),
     ).toBeVisible();
     await expect(
-      page.getByRole("button", { name: "크로매틱 연습" }),
+      page.getByRole("button", { name: "크로매틱 연습", exact: true }),
     ).toBeVisible();
     expect(setupRequests).toHaveLength(1);
     expect(setupRequests[0].method).toBe("POST");
@@ -96,7 +96,7 @@ test.describe("Copilot SDK browser integration", () => {
     );
   });
 
-  test("main routine flow posts free-time and hobby context to the SDK-backed routine route", async ({
+  test("main routine flow posts plan context to the SDK tool-backed routine route", async ({
     page,
   }) => {
     const routineRequests = [];
@@ -108,22 +108,38 @@ test.describe("Copilot SDK browser integration", () => {
 
     await page.route("**/api/routine-chat", async (route) => {
       const request = route.request();
+      const body = JSON.parse(request.postData() || "{}");
       routineRequests.push({
         method: request.method(),
-        headers: request.headers(),
-        body: JSON.parse(request.postData() || "{}"),
+        body,
       });
-
       await route.fulfill({
         status: 200,
-        contentType: "text/event-stream",
-        body: sseBody([
-          {
-            type: "delta",
-            content: "퇴근 후 3시간 30분 안에서 기타 연습을 가볍게 해보세요.",
+        contentType: "application/json",
+        body: JSON.stringify({
+          source: "copilot-sdk-tool",
+          tool: "routine_plan",
+          plan: {
+            source: "copilot-sdk-tool",
+            toolName: "routine_plan",
+            status: "ok",
+            totalMin: 30,
+            availableMin: 270,
+            feedback: "Copilot SDK tool이 선택한 활동을 오늘 시간표로 정리했어요.",
+            entries: [
+              {
+                hobbyId: "guitar",
+                hobbyName: "🎸 기타 연습",
+                taskLabels: ["크로매틱 연습"],
+                durationMin: 30,
+                startLabel: "19:30",
+                endLabel: "20:00",
+                isSuggested: false,
+                reason: "기타 연습은 오늘 선택과 잘 맞아요.",
+              },
+            ],
           },
-          { type: "done" },
-        ]),
+        }),
       });
     });
 
@@ -133,29 +149,32 @@ test.describe("Copilot SDK browser integration", () => {
     await page.getByRole("button", { name: "19시 30분 보통 마무리" }).click();
     await page.getByRole("button", { name: /재택이야/i }).click();
 
-    await expect(page.getByText("AI 루틴 추천")).toBeVisible();
-    await expect(page.getByText(/기타 연습을 가볍게/)).toBeVisible();
+    await page
+      .getByRole("button", { name: /🎸 기타 연습/ })
+      .first()
+      .click();
+    await page.getByRole("button", { name: "추천 시간표 만들기" }).click();
+
+    await expect(page.getByText("스크립트 추천")).toBeVisible();
+    await expect(page.getByText("이 시간표로 해볼까요?")).toBeVisible();
+    await expect(page.getByText("Copilot SDK tool · routine_plan")).toBeVisible();
+    await expect(
+      page.locator(".ds-plan-draft__list").getByText("🎸 기타 연습", {
+        exact: true,
+      }),
+    ).toBeVisible();
     expect(routineRequests).toHaveLength(1);
-    expect(routineRequests[0].method).toBe("POST");
-    expect(routineRequests[0].headers["content-type"]).toContain(
-      "application/json",
-    );
-    expect(routineRequests[0].body).toEqual(
+    expect(routineRequests[0]).toEqual(
       expect.objectContaining({
-        message: expect.stringContaining("출근 전 자유시간 0분"),
-        context: expect.objectContaining({
-          preMin: 0,
-          postMin: 270,
-          workEnd: "19:30",
-          remote: true,
-          swimming: false,
-          hobbies: expect.arrayContaining([
-            expect.objectContaining({
-              id: "guitar",
-              name: "🎸 기타 연습",
-              bgmQueries: ["60fps 메트로놈"],
+        method: "POST",
+        body: expect.objectContaining({
+          action: "plan",
+          context: expect.objectContaining({
+            selectedHobbyIds: ["guitar"],
+            taskSelections: expect.objectContaining({
+              guitar: ["크로매틱 연습"],
             }),
-          ]),
+          }),
         }),
       }),
     );

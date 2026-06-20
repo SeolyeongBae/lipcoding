@@ -1,24 +1,78 @@
-import { CopilotClient } from "@github/copilot-sdk";
-import { configureCopilotCliPath } from "../../../src/copilotCliPath";
-
-configureCopilotCliPath();
+import { defineTool } from "@github/copilot-sdk";
+import { createCopilotClient } from "../../../src/copilotClient";
+import { buildRoutinePlanDraft } from "../../../src/routinePlanner";
+import { searchYouTubeVideos } from "../../../src/youtubeSearch";
 
 const SYSTEM_PROMPT = [
-  "너는 개인 루틴 앱의 따뜻한 하루 코치야.",
+  "너는 RoutineTube의 Copilot agent야.",
   "항상 한국어로 답하고, 사용자의 남은 자유시간과 취미 목록을 바탕으로 자연스러운 하루 루틴을 추천해.",
+  "시간표를 만들 때는 routine_plan tool을 사용하고, 영상 후보가 필요하면 youtube_search tool을 사용해.",
+  "tool 결과를 바탕으로 왜 이 루틴과 영상이 생산성에 맞는지 짧게 설명해.",
   "출근 전 자유시간이 0분이면 절대 출근 전 여유가 있다고 말하지 말고, 아침에는 준비에 집중하라고 안내해.",
-  "남은 시간이 취미 최소 시간보다 짧으면 억지로 루틴을 끼워 넣지 말고 쉬운 준비나 휴식을 제안해.",
-  "말투는 다정하고 개인적이며 응원하는 느낌으로 유지해.",
   "응답은 최대 3문장으로 짧고 명확하게 작성해.",
 ].join(" ");
 
 const FALLBACK_ACTIVITY_NAMES = ["기타 연습", "책 읽기", "드로잉", "가벼운 스트레칭", "드라마 한 편"];
 
+export async function buildRoutinePlanToolResult(context = {}) {
+  return buildRoutinePlanDraft(context);
+}
+
+export async function searchYoutubeToolResult({ query, maxResults } = {}) {
+  return searchYouTubeVideos({
+    query,
+    maxResults,
+    apiKey: process.env.YOUTUBE_API_KEY,
+  });
+}
+
+const routinePlanTool = defineTool("routine_plan", {
+  description:
+    "Build a feasible RoutineTube timetable from selected hobbies, task selections, and available free-time windows.",
+  parameters: {
+    type: "object",
+    properties: {
+      hobbies: { type: "array", description: "Available hobby definitions" },
+      selectedHobbyIds: {
+        type: "array",
+        items: { type: "string" },
+        description: "Hobby IDs the user explicitly selected",
+      },
+      taskSelections: {
+        type: "object",
+        description: "Selected task labels keyed by hobby ID",
+      },
+      freeTime: {
+        type: "object",
+        description: "Computed day free-time context including total and postStartStr",
+      },
+      swimming: { type: "boolean" },
+      isRemote: { type: "boolean" },
+    },
+    required: ["hobbies", "selectedHobbyIds", "taskSelections", "freeTime"],
+  },
+  handler: buildRoutinePlanToolResult,
+});
+
+const youtubeSearchTool = defineTool("youtube_search", {
+  description:
+    "Search YouTube videos for a routine activity and return candidate videos with metadata.",
+  parameters: {
+    type: "object",
+    properties: {
+      query: { type: "string", description: "YouTube search query" },
+      maxResults: { type: "number", description: "Maximum videos to return" },
+    },
+    required: ["query"],
+  },
+  handler: searchYoutubeToolResult,
+});
+
 let client;
 
 function getClient() {
   if (!client) {
-    client = new CopilotClient();
+    client = createCopilotClient();
   }
   return client;
 }
@@ -68,13 +122,42 @@ function emit(controller, encoder, data) {
   controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
 }
 
+function buildAgentPrompt(message, context = {}) {
+  return `
+사용자 메시지:
+${message}
+
+현재 RoutineTube 컨텍스트:
+${JSON.stringify(context, null, 2)}
+
+반드시 필요한 경우 routine_plan, youtube_search tool을 호출해서 답변하세요.
+`;
+}
+
 export async function GET() {
-  return Response.json({ status: "ok", route: "routine-chat" });
+  return Response.json({
+    status: "ok",
+    route: "routine-chat",
+    tools: ["routine_plan", "youtube_search"],
+  });
 }
 
 export async function POST(request) {
   const body = await request.json().catch(() => ({}));
-  const { message, context } = body;
+  const { message, context = {}, action, query, maxResults } = body;
+
+  if (action === "plan") {
+    const plan = await buildRoutinePlanToolResult(context);
+    return Response.json({ plan, tool: "routine_plan", source: "copilot-sdk-tool" });
+  }
+
+  if (action === "youtube") {
+    if (!query) {
+      return Response.json({ error: "query is required" }, { status: 400 });
+    }
+    const result = await searchYoutubeToolResult({ query, maxResults });
+    return Response.json(result);
+  }
 
   if (!message) {
     return Response.json({ error: "message is required" }, { status: 400 });
@@ -97,6 +180,7 @@ export async function POST(request) {
             mode: "append",
             content: SYSTEM_PROMPT,
           },
+          tools: [routinePlanTool, youtubeSearchTool],
         });
 
         unsubDelta = session.on("assistant.message_delta", (event) => {
@@ -109,7 +193,7 @@ export async function POST(request) {
           }
         });
 
-        await session.sendAndWait({ prompt: message });
+        await session.sendAndWait({ prompt: buildAgentPrompt(message, context) });
       } catch {
         emit(controller, encoder, {
           type: "delta",

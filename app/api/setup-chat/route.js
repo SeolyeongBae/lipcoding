@@ -1,7 +1,4 @@
-import { CopilotClient } from "@github/copilot-sdk";
-import { configureCopilotCliPath } from "../../../src/copilotCliPath";
-
-configureCopilotCliPath();
+import { createCopilotClient } from "../../../src/copilotClient";
 
 let client = null;
 let session = null;
@@ -126,7 +123,7 @@ async function getSession() {
   if (initPromise) return initPromise;
 
   initPromise = (async () => {
-    client = new CopilotClient();
+    client = createCopilotClient();
     session = await client.createSession({
       model: "auto",
       streaming: true,

@@ -30,3 +30,6 @@ playwright-report
 *.njsproj
 *.sln
 *.sw?
+
+# Legacy zip-deploy artifact
+deploy.zip

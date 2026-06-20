@@ -1,7 +1,5 @@
-import { CopilotClient, defineTool } from "@github/copilot-sdk";
-import { configureCopilotCliPath } from "../../../src/copilotCliPath";
-
-configureCopilotCliPath();
+import { defineTool } from "@github/copilot-sdk";
+import { createCopilotClient } from "../../../src/copilotClient";
 
 // Conditions for mock weather tool
 const CONDITIONS = ["sunny", "cloudy", "rainy", "partly cloudy"];
@@ -31,7 +29,7 @@ async function getSession() {
   if (session) return session;
   if (initPromise) return initPromise;
   initPromise = (async () => {
-    client = new CopilotClient();
+    client = createCopilotClient();
     session = await client.createSession({
       model: "auto",
       streaming: true,

@@ -6,6 +6,11 @@ import {
   HOBBIES_STORAGE_KEY,
   hydrateHobbies,
 } from "./defaultHobbies";
+import {
+  buildRoutinePlanDraft,
+  getPlanMinutes,
+  parseTimeToMin,
+} from "./routinePlanner";
 import "./DayStart.css";
 
 const TODAY_LOG_KEY = "todayLog";
@@ -255,11 +260,11 @@ function saveTodayLog(log) {
   }
 }
 
-function getPlanMinutes(hobby) {
-  return hobby?.fixedMin ?? hobby?.minMin ?? 0;
+function getInitialStep() {
+  return loadTodayLog().confirmedAt ? 6 : 0;
 }
 
-function makePlanEntry(hobby, video = null, tasks = []) {
+function makePlanEntry(hobby, video = null, tasks = [], extra = {}) {
   return {
     id: `${hobby.id}-${video?.id ?? "activity"}-${Date.now()}`,
     hobbyId: hobby.id,
@@ -269,14 +274,109 @@ function makePlanEntry(hobby, video = null, tasks = []) {
     videoUrl: video?.url ?? null,
     videoThumbnail: video?.thumbnail ?? null,
     videoChannel: video?.channel ?? null,
-    durationMin: getPlanMinutes(hobby),
+    durationMin: extra.durationMin ?? getPlanMinutes(hobby),
+    startLabel: extra.startLabel ?? null,
+    endLabel: extra.endLabel ?? null,
+    reason: extra.reason ?? null,
+    source: extra.source ?? "manual",
     plannedAt: new Date().toISOString(),
     completedAt: null,
   };
 }
 
+function attachVideoToEntry(entry, video) {
+  return {
+    ...entry,
+    videoId: video?.id ?? null,
+    videoTitle: video?.title ?? null,
+    videoUrl: video?.url ?? null,
+    videoThumbnail: video?.thumbnail ?? null,
+    videoChannel: video?.channel ?? null,
+  };
+}
+
+function getVideoCapableEntries(entries = [], hobbies = []) {
+  return entries.filter((entry) => {
+    const hobby = hobbies.find((item) => item.id === entry.hobbyId);
+    return hobby?.showVideos && (hobby.queries?.length ?? 0) > 0;
+  });
+}
+
+function getCurrentPlanStatus(todayLog, hobbies = []) {
+  const entries = Array.isArray(todayLog.entries) ? todayLog.entries : [];
+  const now = new Date();
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  const scheduledEntries = entries
+    .filter((entry) => entry.startLabel && entry.endLabel)
+    .map((entry) => ({
+      ...entry,
+      startMin: parseTimeToMin(entry.startLabel),
+      endMin: parseTimeToMin(entry.endLabel),
+    }))
+    .sort((a, b) => a.startMin - b.startMin);
+  const activeEntry = scheduledEntries.find(
+    (entry) => nowMin >= entry.startMin && nowMin < entry.endMin,
+  );
+
+  if (activeEntry) {
+    const hobby = hobbies.find((item) => item.id === activeEntry.hobbyId);
+    return {
+      type: "activity",
+      title: `${hobby?.name ?? activeEntry.hobbyId} 시간이에요`,
+      message: activeEntry.videoTitle
+        ? "지금 시간표에 맞는 영상을 바로 켤 수 있어요."
+        : "지금 할 일을 시작할 시간이에요.",
+      entry: activeEntry,
+      hobby,
+    };
+  }
+
+  const firstEntry = scheduledEntries[0];
+  const dayContext = todayLog.dayContext;
+  const workEndMin = dayContext?.workEnd ? parseTimeToMin(dayContext.workEnd) : null;
+  const postStartMin = dayContext?.postStartStr
+    ? parseTimeToMin(dayContext.postStartStr)
+    : firstEntry?.startMin;
+
+  if (firstEntry && nowMin < firstEntry.startMin) {
+    if (workEndMin !== null && nowMin < workEndMin) {
+      return {
+        type: "work",
+        title: "지금은 일하고 있는 시간이에요",
+        message: `오늘 첫 루틴은 ${firstEntry.startLabel}에 시작해요.`,
+        entry: firstEntry,
+      };
+    }
+
+    if (postStartMin !== null && nowMin < postStartMin) {
+      return {
+        type: "waiting",
+        title: "아직 루틴 시작 전이에요",
+        message: `오늘 루틴은 ${firstEntry.startLabel}부터 시작하면 돼요.`,
+        entry: firstEntry,
+      };
+    }
+  }
+
+  if (scheduledEntries.length > 0 && nowMin >= scheduledEntries.at(-1).endMin) {
+    return {
+      type: "done",
+      title: "오늘 계획한 활동은 마무리됐어요",
+      message: "체크를 보면서 완료한 일을 정리해도 좋아요.",
+      entry: scheduledEntries.at(-1),
+    };
+  }
+
+  return {
+    type: "empty",
+    title: "오늘 확정된 시간표가 없어요",
+    message: "하루 시작을 눌러 오늘 할 일을 먼저 정해볼까요?",
+    entry: null,
+  };
+}
+
 export default function DayStart() {
-  const [step, setStep] = useState(0);
+  const [step, setStep] = useState(() => getInitialStep());
   const [hobbies, setHobbies] = useState(() =>
     DEFAULT_HOBBIES.map(toRoutineHobby),
   );
@@ -285,22 +385,29 @@ export default function DayStart() {
   const [isRemote, setIsRemote] = useState(null);
   const [freeTime, setFreeTime] = useState(null);
   const [selectedHobby, setSelectedHobby] = useState(null);
+  const [selectedHobbyIds, setSelectedHobbyIds] = useState([]);
+  const [taskSelections, setTaskSelections] = useState({});
+  const [planDraft, setPlanDraft] = useState(null);
+  const [pendingPlan, setPendingPlan] = useState(null);
+  const [videoSelections, setVideoSelections] = useState({});
+  const [activeVideoEntryId, setActiveVideoEntryId] = useState(null);
   const [videos, setVideos] = useState([]);
   const [loadingVideos, setLoadingVideos] = useState(false);
   const [activeQuery, setActiveQuery] = useState(null);
-  const [aiRec, setAiRec] = useState({ text: "", loading: false });
-  const [modalState, setModalState] = useState(null);
   const [todayLog, setTodayLog] = useState(() => loadTodayLog());
-  const [selectedTasks, setSelectedTasks] = useState([]);
   const [customTask, setCustomTask] = useState("");
+  const [isPlanning, setIsPlanning] = useState(false);
   const workEndOptions = getWorkEndOptions();
 
   const hobbyPanelRef = useRef(null);
   const logRef = useRef(null);
+  const planDraftRef = useRef(null);
 
   useEffect(() => {
     setHobbies(loadRoutineHobbies());
-    setTodayLog(loadTodayLog());
+    const storedLog = loadTodayLog();
+    setTodayLog(storedLog);
+    if (storedLog.confirmedAt) setStep(6);
   }, []);
 
   useEffect(() => {
@@ -319,62 +426,21 @@ export default function DayStart() {
     setLoadingVideos(true);
     setVideos([]);
     try {
-      const res = await fetch(
-        `/api/youtube?q=${encodeURIComponent(query)}&maxResults=${VIDEO_RESULTS_COUNT}`,
-      );
+      const res = await fetch("/api/routine-chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "youtube",
+          query,
+          maxResults: VIDEO_RESULTS_COUNT,
+        }),
+      });
       const data = await res.json();
       setVideos(data.videos || []);
     } catch {
       setVideos([]);
     } finally {
       setLoadingVideos(false);
-    }
-  }
-
-  async function fetchAiRec(ft, sw, finishTime, remote, hobbyList) {
-    setAiRec({ text: "", loading: true });
-    const hobbyNames = hobbyList.map((h) => h.name).join(", ");
-    const postLabel = sw ? "수영 후" : remote ? "업무 후" : "퇴근 후";
-    const message = `업무 마무리: ${finishTime}. 출근 전 자유시간 ${formatMin(ft.pre)}, ${postLabel} 자유시간 ${formatMin(ft.post)}. 취미 프로필: ${hobbyNames}. 출근 전 시간이 0분이면 여유가 있다고 말하지 말고 아침엔 준비에 집중하라고 해줘. 짧은 틈을 억지로 채우기보다 오늘 퇴근 후 자연스럽게 할 수 있는 루틴을 추천해줘.`;
-    const context = {
-      preMin: ft.pre,
-      postMin: ft.post,
-      workEnd: finishTime,
-      remote,
-      swimming: sw,
-      hobbies: hobbyList,
-    };
-    try {
-      const res = await fetch("/api/routine-chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message, context }),
-      });
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buf = "";
-      let rec = "";
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buf += decoder.decode(value, { stream: true });
-        const lines = buf.split("\n");
-        buf = lines.pop() ?? "";
-        for (const line of lines) {
-          if (!line.startsWith("data: ")) continue;
-          try {
-            const evt = JSON.parse(line.slice(6));
-            if (evt.type === "delta") {
-              rec += evt.content;
-              setAiRec({ text: rec, loading: false });
-            } else if (evt.type === "done") {
-              setAiRec({ text: rec, loading: false });
-            }
-          } catch {}
-        }
-      }
-    } catch {
-      setAiRec({ text: "", loading: false });
     }
   }
 
@@ -391,27 +457,31 @@ export default function DayStart() {
     const ft = calcFreeTime(swimming, workEnd, val);
     setFreeTime(ft);
     setStep(4);
-    fetchAiRec(ft, swimming, workEnd, val, hobbies);
   };
 
   function handleHobbySelect(hobby) {
-    if (selectedHobby?.id === hobby.id) {
-      setSelectedHobby(null);
-      setSelectedTasks([]);
-      setCustomTask("");
-      setVideos([]);
-      setActiveQuery(null);
+    setPlanDraft(null);
+    setPendingPlan(null);
+    setActiveVideoEntryId(null);
+    setVideos([]);
+    setActiveQuery(null);
+
+    if (selectedHobbyIds.includes(hobby.id)) {
+      setSelectedHobbyIds((current) => current.filter((id) => id !== hobby.id));
+      if (selectedHobby?.id === hobby.id) {
+        setSelectedHobby(null);
+        setCustomTask("");
+      }
       return;
     }
+
+    setSelectedHobbyIds((current) => [...current, hobby.id]);
+    setTaskSelections((current) => ({
+      ...current,
+      [hobby.id]: current[hobby.id] ?? (hobby.tasks ?? []),
+    }));
     setSelectedHobby(hobby);
-    setSelectedTasks(hobby.tasks ?? []);
     setCustomTask("");
-    if (hobby.showVideos && hobby.queries.length > 0) {
-      fetchVideos(hobby.queries[0]);
-    } else {
-      setVideos([]);
-      setActiveQuery(null);
-    }
   }
 
   function getPlannedEntries() {
@@ -419,7 +489,8 @@ export default function DayStart() {
   }
 
   function getCurrentTasks() {
-    return selectedTasks;
+    if (!selectedHobby) return [];
+    return taskSelections[selectedHobby.id] ?? selectedHobby.tasks ?? [];
   }
 
   function getPlannedTotalMin() {
@@ -446,51 +517,170 @@ export default function DayStart() {
     return `오늘 자유시간 ${formatMin(totalMin)} 중 ${formatMin(plannedMin)}을 담았어요. ${postLabel}에는 담은 순서대로 시작하면 좋아요.`;
   }
 
-  function handleVideoSelect(video) {
-    setModalState({ video, hobby: selectedHobby });
-  }
-
   function handleTaskToggle(task) {
-    setSelectedTasks((current) =>
-      current.includes(task)
-        ? current.filter((item) => item !== task)
-        : [...current, task],
-    );
+    if (!selectedHobby) return;
+    setPlanDraft(null);
+    setTaskSelections((current) => {
+      const tasks = current[selectedHobby.id] ?? selectedHobby.tasks ?? [];
+      return {
+        ...current,
+        [selectedHobby.id]: tasks.includes(task)
+          ? tasks.filter((item) => item !== task)
+          : [...tasks, task],
+      };
+    });
   }
 
   function handleCustomTaskAdd() {
+    if (!selectedHobby) return;
     const task = customTask.trim();
     if (!task) return;
-    setSelectedTasks((current) =>
-      current.includes(task) ? current : [...current, task],
-    );
+    setPlanDraft(null);
+    setTaskSelections((current) => {
+      const tasks = current[selectedHobby.id] ?? selectedHobby.tasks ?? [];
+      return {
+        ...current,
+        [selectedHobby.id]: tasks.includes(task) ? tasks : [...tasks, task],
+      };
+    });
     setCustomTask("");
   }
 
-  function handleAddPlan(
-    video = null,
-    hobby = selectedHobby,
-    tasks = getCurrentTasks(),
-  ) {
-    if (!hobby) return;
-    const entry = makePlanEntry(hobby, video, tasks);
-    const newLog = { ...todayLog, entries: [...getPlannedEntries(), entry] };
-    setTodayLog(newLog);
-    saveTodayLog(newLog);
-    setModalState(null);
+  function buildLocalPlanDraft() {
+    return buildRoutinePlanDraft({
+      hobbies,
+      selectedHobbyIds,
+      taskSelections,
+      freeTime,
+      swimming,
+      isRemote,
+    });
+  }
+
+  async function handleBuildPlanDraft() {
+    setIsPlanning(true);
+    setPendingPlan(null);
+    setActiveVideoEntryId(null);
+    setVideos([]);
+    setActiveQuery(null);
+
+    try {
+      const res = await fetch("/api/routine-chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "plan",
+          context: {
+            hobbies,
+            selectedHobbyIds,
+            taskSelections,
+            freeTime,
+            swimming,
+            isRemote,
+          },
+        }),
+      });
+      const data = await res.json();
+      setPlanDraft(data.plan ?? buildLocalPlanDraft());
+    } catch {
+      setPlanDraft(buildLocalPlanDraft());
+    } finally {
+      setIsPlanning(false);
+      setTimeout(() => {
+        planDraftRef.current?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      }, 100);
+    }
+  }
+
+  function handleAcceptPlanDraft() {
+    if (!planDraft || planDraft.status === "over") return;
+    const nextEntries = planDraft.entries
+      .map((entry) => {
+        const hobby = hobbies.find((item) => item.id === entry.hobbyId);
+        if (!hobby) return null;
+        return makePlanEntry(hobby, null, entry.taskLabels, {
+          durationMin: entry.durationMin,
+          startLabel: entry.startLabel,
+          endLabel: entry.endLabel,
+          reason: entry.reason,
+          source: entry.isSuggested ? "script-suggested" : "script-selected",
+        });
+      })
+      .filter(Boolean);
+    const nextPendingPlan = {
+      entries: nextEntries,
+      dayContext: {
+        workEnd,
+        swimming,
+        isRemote,
+        postStartStr: freeTime?.postStartStr ?? null,
+        totalMin: freeTime?.total ?? 0,
+      },
+    };
+    const firstVideoEntry = getVideoCapableEntries(nextEntries, hobbies)[0];
+    setPendingPlan(nextPendingPlan);
+    setVideoSelections({});
+    setActiveVideoEntryId(firstVideoEntry?.id ?? null);
+    setPlanDraft(null);
     setSelectedHobby(null);
-    setSelectedTasks([]);
+    setSelectedHobbyIds([]);
     setCustomTask("");
     setVideos([]);
     setActiveQuery(null);
-    setTimeout(() => {
-      logRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 100);
+    setStep(5);
+    if (firstVideoEntry) {
+      const firstHobby = hobbies.find((item) => item.id === firstVideoEntry.hobbyId);
+      if (firstHobby?.queries?.[0]) fetchVideos(firstHobby.queries[0]);
+    }
   }
 
-  function handleAddVideoPlan() {
-    if (!modalState) return;
-    handleAddPlan(modalState.video, modalState.hobby);
+  function handleRejectPlanDraft() {
+    setPlanDraft(null);
+  }
+
+  function handleVideoEntrySelect(entry) {
+    const hobby = hobbies.find((item) => item.id === entry.hobbyId);
+    if (!hobby || !hobby.showVideos || hobby.queries.length === 0) return;
+    setActiveVideoEntryId(entry.id);
+    fetchVideos(hobby.queries[0]);
+  }
+
+  function handleVideoCheck(entryId, video) {
+    setVideoSelections((current) => ({
+      ...current,
+      [entryId]: current[entryId]?.id === video.id ? null : video,
+    }));
+  }
+
+  function isReadyForFinalConfirm() {
+    if (!pendingPlan) return false;
+    return getVideoCapableEntries(pendingPlan.entries, hobbies).every(
+      (entry) => videoSelections[entry.id],
+    );
+  }
+
+  function handleFinalConfirm() {
+    if (!pendingPlan || !isReadyForFinalConfirm()) return;
+    const entries = pendingPlan.entries.map((entry) =>
+      attachVideoToEntry(entry, videoSelections[entry.id]),
+    );
+    const newLog = {
+      date: getTodayStr(),
+      entries,
+      dayContext: pendingPlan.dayContext,
+      confirmedAt: new Date().toISOString(),
+    };
+    setTodayLog(newLog);
+    saveTodayLog(newLog);
+    setPendingPlan(null);
+    setVideoSelections({});
+    setActiveVideoEntryId(null);
+    setVideos([]);
+    setActiveQuery(null);
+    setStep(6);
   }
 
   function handleTogglePlanDone(entryId, fallbackIndex) {
@@ -530,66 +720,38 @@ export default function DayStart() {
     setIsRemote(null);
     setFreeTime(null);
     setSelectedHobby(null);
+    setSelectedHobbyIds([]);
+    setTaskSelections({});
+    setPlanDraft(null);
+    setPendingPlan(null);
+    setVideoSelections({});
+    setActiveVideoEntryId(null);
     setVideos([]);
     setActiveQuery(null);
-    setAiRec({ text: "", loading: false });
-    setModalState(null);
-    setSelectedTasks([]);
     setCustomTask("");
+    const emptyLog = { date: getTodayStr(), entries: [] };
+    setTodayLog(emptyLog);
+    saveTodayLog(emptyLog);
   };
 
   const getRecommended = (availableMin) =>
     hobbies.filter((hobby) => hobby.minMin <= availableMin);
+  const pendingEntries = pendingPlan?.entries ?? [];
+  const videoEntries = getVideoCapableEntries(pendingEntries, hobbies);
+  const activeVideoEntry =
+    videoEntries.find((entry) => entry.id === activeVideoEntryId) ??
+    videoEntries[0] ??
+    null;
+  const activeVideoHobby = activeVideoEntry
+    ? hobbies.find((hobby) => hobby.id === activeVideoEntry.hobbyId)
+    : null;
+  const missingVideoCount = videoEntries.filter(
+    (entry) => !videoSelections[entry.id],
+  ).length;
+  const currentStatus = getCurrentPlanStatus(todayLog, hobbies);
 
   return (
-    <div className={`daystart${step === 4 ? " daystart--result" : ""}`}>
-      {/* Video selection modal */}
-      {modalState && (
-        <div
-          role="dialog"
-          aria-label={`${modalState.hobby.name} 영상 시작`}
-          className="ds-modal-overlay"
-          onClick={(e) => e.target === e.currentTarget && setModalState(null)}
-        >
-          <div className="ds-modal">
-            <button
-              className="ds-modal__close"
-              onClick={() => setModalState(null)}
-            >
-              ×
-            </button>
-            <h2 className="ds-modal__title">🎬 {modalState.hobby.name}</h2>
-            <p className="ds-modal__video-title">{modalState.video.title}</p>
-            {modalState.video.thumbnail && (
-              <img
-                src={modalState.video.thumbnail}
-                alt={modalState.video.title}
-                className="ds-modal__thumb"
-              />
-            )}
-            <div className="ds-modal__actions">
-              <button
-                className="ds-btn ds-btn--primary"
-                onClick={handleAddVideoPlan}
-              >
-                ✓ 오늘 플랜에 담기
-              </button>
-              <a
-                href={
-                  modalState.video.url ||
-                  `https://www.youtube.com/watch?v=${modalState.video.id}`
-                }
-                target="_blank"
-                rel="noopener noreferrer"
-                className="ds-modal__youtube-link"
-              >
-                ▶ YouTube에서 보기
-              </a>
-            </div>
-          </div>
-        </div>
-      )}
-
+    <div className={`daystart${step >= 4 ? " daystart--result" : ""}`}>
       {step === 0 && (
         <div className="ds-welcome">
           <div className="ds-emoji">☀️</div>
@@ -762,20 +924,18 @@ export default function DayStart() {
             <p>{getPlanGuide()}</p>
           </div>
 
-          {/* AI 루틴 추천 */}
-          {(aiRec.loading || aiRec.text) && (
-            <div className="ds-ai-rec">
-              <h3>AI 루틴 추천 ✨</h3>
-              {aiRec.loading && !aiRec.text && (
-                <div className="ds-loading">추천 생성 중... 🤔</div>
-              )}
-              {aiRec.text && <p className="ds-ai-rec__text">{aiRec.text}</p>}
-            </div>
-          )}
-
           {/* 취미 선택 버튼 */}
           <div className="ds-hobbies">
-            <h3>오늘 뭐 해볼까? 🎯</h3>
+            <div className="ds-hobbies__header">
+              <div>
+                <h3>오늘 하고 싶은 일부터 골라볼까요? 🎯</h3>
+                <p>
+                  먼저 끌리는 활동을 담으면, 남은 시간에 맞춰 시간표를
+                  스크립트로 만들어볼게요.
+                </p>
+              </div>
+              <span>{selectedHobbyIds.length}개 선택</span>
+            </div>
 
             {freeTime.pre > 0 && (
               <div className="ds-hobby-section">
@@ -787,7 +947,8 @@ export default function DayStart() {
                     getRecommended(freeTime.pre).map((h) => (
                       <button
                         key={`pre-${h.id}`}
-                        className={`ds-hobby-btn${selectedHobby?.id === h.id ? " ds-hobby-btn--active" : ""}`}
+                        type="button"
+                        className={`ds-hobby-btn${selectedHobbyIds.includes(h.id) ? " ds-hobby-btn--active" : ""}`}
                         onClick={() => handleHobbySelect(h)}
                       >
                         <span>{h.name}</span>
@@ -815,7 +976,8 @@ export default function DayStart() {
                   {getRecommended(freeTime.post).map((h) => (
                     <button
                       key={`post-${h.id}`}
-                      className={`ds-hobby-btn${selectedHobby?.id === h.id ? " ds-hobby-btn--active" : ""}`}
+                      type="button"
+                      className={`ds-hobby-btn${selectedHobbyIds.includes(h.id) ? " ds-hobby-btn--active" : ""}`}
                       onClick={() => handleHobbySelect(h)}
                     >
                       <span>{h.name}</span>
@@ -827,6 +989,21 @@ export default function DayStart() {
                 </div>
               </div>
             )}
+
+            <div className="ds-plan-builder">
+              <button
+                type="button"
+                className="ds-task-add-btn"
+                onClick={handleBuildPlanDraft}
+                disabled={selectedHobbyIds.length === 0 || isPlanning}
+              >
+                {isPlanning ? "Copilot이 시간표 짜는 중..." : "추천 시간표 만들기"}
+              </button>
+              <p>
+                영상은 시간표를 확정한 다음, 각 플랜 카드에서 필요할 때만
+                고를 수 있어요.
+              </p>
+            </div>
           </div>
 
           {/* 취미 상세 패널 */}
@@ -852,11 +1029,11 @@ export default function DayStart() {
                         <input
                           type="checkbox"
                           className="ds-task-pick-checkbox"
-                          checked={selectedTasks.includes(task)}
+                          checked={getCurrentTasks().includes(task)}
                           onChange={() => handleTaskToggle(task)}
                         />
                         <span
-                          className={`ds-task-pick-text${selectedTasks.includes(task) ? " ds-task-pick-text--checked" : ""}`}
+                          className={`ds-task-pick-text${getCurrentTasks().includes(task) ? " ds-task-pick-text--checked" : ""}`}
                         >
                           {task}
                         </span>
@@ -875,7 +1052,10 @@ export default function DayStart() {
                     className="ds-task-pick-input"
                     value={customTask}
                     onChange={(event) => setCustomTask(event.target.value)}
-                    placeholder="오늘 하고 싶은 세부 활동 직접 추가"
+                    name="customTask"
+                    autoComplete="off"
+                    aria-label="세부 활동 직접 추가"
+                    placeholder="예: 좋아하는 곡 1절만 연습…"
                   />
                   <button
                     className="ds-task-pick-add"
@@ -885,78 +1065,195 @@ export default function DayStart() {
                     추가
                   </button>
                 </form>
+                <p className="ds-hobby-panel__hint">
+                  체크한 세부 활동은 추천 시간표에 반영돼요.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {planDraft && (
+            <div
+              className="ds-plan-draft"
+              aria-live="polite"
+              ref={planDraftRef}
+            >
+              <div className="ds-plan-draft__header">
+                <div>
+                  <p className="ds-plan-draft__eyebrow">스크립트 추천</p>
+                  <h3>이 시간표로 해볼까요?</h3>
+                  {planDraft.toolName && (
+                    <span className="ds-tool-badge">
+                      Copilot SDK tool · {planDraft.toolName}
+                    </span>
+                  )}
+                </div>
+                <span>
+                  {formatMin(planDraft.totalMin)} /{" "}
+                  {formatMin(planDraft.availableMin)}
+                </span>
+              </div>
+              <p className="ds-plan-draft__feedback">{planDraft.feedback}</p>
+              <ol className="ds-plan-draft__list">
+                {planDraft.entries.map((entry) => (
+                  <li
+                    key={`${entry.hobbyId}-${entry.startLabel}`}
+                    className={entry.isSuggested ? "ds-plan-draft__suggested" : ""}
+                  >
+                    <time>
+                      {entry.startLabel}–{entry.endLabel}
+                    </time>
+                    <div>
+                      <strong>
+                        {entry.hobbyName}
+                        {entry.isSuggested ? " · 추천 추가" : ""}
+                      </strong>
+                      <p>{entry.taskLabels.join(" · ") || "가볍게 시작"}</p>
+                      <small>{entry.reason}</small>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+              <div className="ds-plan-draft__actions">
                 <button
-                  className="ds-task-add-btn"
-                  onClick={() => handleAddPlan()}
-                  disabled={getCurrentTasks().length === 0}
+                  type="button"
+                  className="ds-btn ds-btn--primary"
+                  onClick={handleAcceptPlanDraft}
+                  disabled={planDraft.status === "over"}
                 >
-                  + 선택한 {getCurrentTasks().length}개 활동을 오늘 플랜에 담기
+                  Yes, 이대로 할래요
+                </button>
+                <button
+                  type="button"
+                  className="ds-reset-btn"
+                  onClick={handleRejectPlanDraft}
+                >
+                  No, 다시 고를래요
                 </button>
               </div>
+            </div>
+          )}
 
-              {selectedHobby.showVideos && (
-                <div className="ds-hobby-panel__videos">
-                  <div className="ds-hobby-panel__videos-title">
-                    📺 BGM / 참고 영상 · 최대 {VIDEO_RESULTS_COUNT}개
+        </div>
+      )}
+
+      {step === 5 && pendingPlan && (
+        <div className="ds-result">
+          <div className="ds-result__header">
+            <div>
+              <p className="ds-plan-draft__eyebrow">Page 2 · 영상 선택</p>
+              <h2>각 활동에 맞는 YouTube를 하나씩 골라주세요</h2>
+            </div>
+            <button className="ds-reset-btn" onClick={() => setStep(4)}>
+              시간표로 돌아가기
+            </button>
+          </div>
+
+          <div className="ds-video-step">
+            <aside className="ds-video-step__schedule">
+              <h3>오늘 시간표</h3>
+              <ol>
+                {pendingEntries.map((entry) => {
+                  const hobby = hobbies.find((item) => item.id === entry.hobbyId);
+                  const selectedVideo = videoSelections[entry.id];
+                  const canSelectVideo = videoEntries.some(
+                    (item) => item.id === entry.id,
+                  );
+                  return (
+                    <li key={entry.id}>
+                      <button
+                        type="button"
+                        className={`ds-video-step__entry${activeVideoEntry?.id === entry.id ? " ds-video-step__entry--active" : ""}`}
+                        onClick={() => handleVideoEntrySelect(entry)}
+                        disabled={!canSelectVideo}
+                      >
+                        <span className="ds-today-log__time">
+                          {entry.startLabel}–{entry.endLabel}
+                        </span>
+                        <strong>{hobby?.name ?? entry.hobbyId}</strong>
+                        <small>
+                          {canSelectVideo
+                            ? selectedVideo?.title ?? "영상 1개를 골라주세요"
+                            : "영상 없이 진행"}
+                        </small>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ol>
+            </aside>
+
+            <section className="ds-video-step__picker">
+              {activeVideoEntry && activeVideoHobby ? (
+                <>
+                  <div className="ds-video-picker__header">
+                    <div>
+                      <p className="ds-plan-draft__eyebrow">단일 선택</p>
+                      <h3>{activeVideoHobby.name}</h3>
+                    </div>
+                    <span className="ds-video-step__selected-count">
+                      {videoSelections[activeVideoEntry.id] ? "선택 완료" : "미선택"}
+                    </span>
                   </div>
 
-                  {selectedHobby.queries.length >= 1 && (
-                    <div className="ds-videos__tabs">
-                      {selectedHobby.queries.map((q, i) => (
-                        <button
-                          key={i}
-                          className={`ds-videos__tab${activeQuery === q ? " ds-videos__tab--active" : ""}`}
-                          onClick={() => fetchVideos(q)}
-                        >
-                          {q}
-                        </button>
-                      ))}
-                    </div>
-                  )}
+                  <div className="ds-videos__tabs">
+                    {activeVideoHobby.queries.map((q, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        className={`ds-videos__tab${activeQuery === q ? " ds-videos__tab--active" : ""}`}
+                        onClick={() => fetchVideos(q)}
+                      >
+                        {q}
+                      </button>
+                    ))}
+                  </div>
 
                   {loadingVideos && (
-                    <div className="ds-loading">불러오는 중... ⏳</div>
+                    <div className="ds-loading">불러오는 중… ⏳</div>
                   )}
 
                   {!loadingVideos && videos.length > 0 && (
-                    <div className="ds-video-grid">
-                      {videos.map((v) => {
-                        const viewStr = formatViewCount(v.viewCount);
-                        const dateStr = formatPublishedAt(v.publishedAt);
+                    <div className="ds-video-choice-grid">
+                      {videos.map((video) => {
+                        const selected =
+                          videoSelections[activeVideoEntry.id]?.id === video.id;
+                        const viewStr = formatViewCount(video.viewCount);
+                        const dateStr = formatPublishedAt(video.publishedAt);
                         return (
-                          <button
-                            key={v.id}
-                            className="ds-video-card"
-                            onClick={() => handleVideoSelect(v)}
+                          <label
+                            key={video.id}
+                            className={`ds-video-choice${selected ? " ds-video-choice--selected" : ""}`}
                           >
-                            {v.thumbnail && (
+                            <input
+                              type="checkbox"
+                              checked={selected}
+                              onChange={() =>
+                                handleVideoCheck(activeVideoEntry.id, video)
+                              }
+                            />
+                            {video.thumbnail && (
                               <img
-                                src={v.thumbnail}
-                                alt={v.title}
+                                src={video.thumbnail}
+                                alt={video.title}
                                 className="ds-video-thumb"
                               />
                             )}
-                            <div className="ds-video-info">
-                              <div className="ds-video-title">{v.title}</div>
-                              <div className="ds-video-channel">
-                                {v.channel}
-                              </div>
+                            <span className="ds-video-info">
+                              <strong className="ds-video-title">
+                                {video.title}
+                              </strong>
+                              <span className="ds-video-channel">
+                                {video.channel}
+                              </span>
                               {(viewStr || dateStr) && (
-                                <div className="ds-video-meta">
-                                  {viewStr && (
-                                    <span className="ds-video-views">
-                                      👁 {viewStr}
-                                    </span>
-                                  )}
-                                  {dateStr && (
-                                    <span className="ds-video-date">
-                                      📅 {dateStr}
-                                    </span>
-                                  )}
-                                </div>
+                                <span className="ds-video-meta">
+                                  {viewStr && <span>👁 {viewStr}</span>}
+                                  {dateStr && <span>📅 {dateStr}</span>}
+                                </span>
                               )}
-                            </div>
-                          </button>
+                            </span>
+                          </label>
                         );
                       })}
                     </div>
@@ -965,70 +1262,133 @@ export default function DayStart() {
                   {!loadingVideos && videos.length === 0 && (
                     <div className="ds-loading">영상을 불러올 수 없어요 😢</div>
                   )}
+                </>
+              ) : (
+                <div className="ds-video-step__empty">
+                  이번 시간표에는 YouTube가 필요한 활동이 없어요.
                 </div>
               )}
-            </div>
-          )}
+            </section>
+          </div>
 
-          {/* 오늘의 플랜 */}
-          <div className="ds-today-log" data-testid="today-log" ref={logRef}>
-            <h3>오늘 담은 것 🛒</h3>
-            <p className="ds-today-log__guide">{getPlanGuide()}</p>
-            {getPlannedEntries().length === 0 ? (
-              <p className="ds-today-log__empty">
-                아직 담은 게 없어요. 하고 싶은 활동이나 영상을 골라 담아보세요!
+          <div className="ds-final-confirm">
+            <div>
+              <p className="ds-plan-draft__eyebrow">최종 확인</p>
+              <h3>이렇게 하시겠습니까?</h3>
+              <p>
+                {missingVideoCount > 0
+                  ? `아직 ${missingVideoCount}개 활동의 영상을 골라야 해요.`
+                  : "시간표와 영상 선택이 모두 준비됐어요."}
               </p>
-            ) : (
-              <ul className="ds-today-log__list">
-                {getPlannedEntries().map((entry, i) => {
-                  const hobby = hobbies.find((h) => h.id === entry.hobbyId);
-                  const durationMin =
-                    entry.durationMin ?? getPlanMinutes(hobby);
-                  const taskText =
-                    Array.isArray(entry.taskLabels) &&
-                    entry.taskLabels.length > 0
-                      ? entry.taskLabels.join(" · ")
-                      : "";
-                  const detailText =
-                    [taskText, entry.videoTitle].filter(Boolean).join(" / ") ||
-                    "활동만 담김";
-                  return (
-                    <li
-                      key={entry.id ?? `${entry.hobbyId}-${entry.videoId}-${i}`}
-                      className={`ds-today-log__item${entry.completedAt ? " ds-today-log__item--done" : ""}`}
+            </div>
+            <button
+              type="button"
+              className="ds-btn ds-btn--primary"
+              onClick={handleFinalConfirm}
+              disabled={!isReadyForFinalConfirm()}
+            >
+              네, 오늘은 이렇게 할래요
+            </button>
+          </div>
+        </div>
+      )}
+
+      {step === 6 && (
+        <div className="ds-result">
+          <div className="ds-result__header">
+            <div>
+              <p className="ds-plan-draft__eyebrow">오늘의 메인</p>
+              <h2>{currentStatus.title}</h2>
+            </div>
+            <button className="ds-reset-btn" onClick={handleReset}>
+              오늘 다시 계획하기
+            </button>
+          </div>
+
+          <section className="ds-now-card">
+            <p>{currentStatus.message}</p>
+            {currentStatus.entry?.videoTitle && (
+              <a
+                className="ds-now-card__video"
+                href={
+                  currentStatus.entry.videoUrl ||
+                  `https://www.youtube.com/watch?v=${currentStatus.entry.videoId}`
+                }
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {currentStatus.entry.videoThumbnail && (
+                  <img
+                    src={currentStatus.entry.videoThumbnail}
+                    alt={currentStatus.entry.videoTitle}
+                  />
+                )}
+                <span>
+                  <strong>{currentStatus.entry.videoTitle}</strong>
+                  <small>{currentStatus.entry.videoChannel}</small>
+                </span>
+              </a>
+            )}
+          </section>
+
+          <div className="ds-today-log" data-testid="today-log" ref={logRef}>
+            <h3>오늘 확정한 시간표</h3>
+            <ul className="ds-today-log__list">
+              {getPlannedEntries().map((entry, i) => {
+                const hobby = hobbies.find((h) => h.id === entry.hobbyId);
+                const durationMin = entry.durationMin ?? getPlanMinutes(hobby);
+                const taskText =
+                  Array.isArray(entry.taskLabels) && entry.taskLabels.length > 0
+                    ? entry.taskLabels.join(" · ")
+                    : "활동만 담김";
+                return (
+                  <li
+                    key={entry.id ?? `${entry.hobbyId}-${entry.videoId}-${i}`}
+                    className={`ds-today-log__item${entry.completedAt ? " ds-today-log__item--done" : ""}`}
+                  >
+                    <button
+                      type="button"
+                      className="ds-checklist__check"
+                      aria-label={`${hobby?.name ?? entry.hobbyId} 완료 표시`}
+                      onClick={() => handleTogglePlanDone(entry.id, i)}
                     >
-                      <button
-                        type="button"
-                        className="ds-checklist__check"
-                        aria-label={`${hobby?.name ?? entry.hobbyId} 완료 표시`}
-                        onClick={() => handleTogglePlanDone(entry.id, i)}
-                      >
-                        {entry.completedAt ? "✓" : ""}
-                      </button>
-                      <div className="ds-today-log__main">
-                        <span className="ds-today-log__hobby">
-                          {hobby?.name ?? entry.hobbyId}
+                      {entry.completedAt ? "✓" : ""}
+                    </button>
+                    <div className="ds-today-log__main">
+                      <span className="ds-today-log__hobby">
+                        {hobby?.name ?? entry.hobbyId}
+                      </span>
+                      <div className="ds-today-log__detail">
+                        <span className="ds-today-log__time">
+                          {entry.startLabel}–{entry.endLabel}
                         </span>
                         <span className="ds-today-log__video">
-                          {detailText}
+                          {[taskText, entry.videoTitle]
+                            .filter(Boolean)
+                            .join(" / ")}
                         </span>
+                        {entry.reason && (
+                          <span className="ds-today-log__reason">
+                            {entry.reason}
+                          </span>
+                        )}
                       </div>
-                      <span className="ds-today-log__duration">
-                        {formatMin(durationMin)}
-                      </span>
-                      <button
-                        type="button"
-                        className="ds-today-log__remove"
-                        aria-label={`${hobby?.name ?? entry.hobbyId} 빼기`}
-                        onClick={() => handleRemovePlan(entry.id, i)}
-                      >
-                        ×
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
+                    </div>
+                    <span className="ds-today-log__duration">
+                      {formatMin(durationMin)}
+                    </span>
+                    <button
+                      type="button"
+                      className="ds-today-log__remove"
+                      aria-label={`${hobby?.name ?? entry.hobbyId} 빼기`}
+                      onClick={() => handleRemovePlan(entry.id, i)}
+                    >
+                      ×
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
           </div>
         </div>
       )}

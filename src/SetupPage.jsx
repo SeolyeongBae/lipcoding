@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { DEFAULT_HOBBIES, HOBBIES_STORAGE_KEY } from "./defaultHobbies";
 import { useSetupChat } from "./hooks/useSetupChat";
 import {
@@ -15,6 +17,8 @@ import {
   updateHobbyList,
 } from "./setupFlow";
 import "./SetupPage.css";
+
+const MARKDOWN_REMARK_PLUGINS = [remarkGfm];
 
 function loadStoredHobbies() {
   if (typeof window === "undefined") return [];
@@ -44,12 +48,14 @@ function MessageBubble({ message, onTagClick, disableTags }) {
           {parts.map((part, index) => {
             if (part.type === "tag") return null;
             return (
-              <span
+              <div
                 key={`${message.role}-text-${index}`}
-                className="setup-message__copy"
+                className="setup-message__markdown"
               >
-                {part.value}
-              </span>
+                <ReactMarkdown remarkPlugins={MARKDOWN_REMARK_PLUGINS}>
+                  {part.value}
+                </ReactMarkdown>
+              </div>
             );
           })}
           {message.streaming && (
@@ -81,7 +87,7 @@ function MessageBubble({ message, onTagClick, disableTags }) {
   );
 }
 
-function HobbySummaryCard({ hobby }) {
+function HobbySummaryCard({ hobby, onAddItem, onRemoveItem }) {
   return (
     <article className="setup-summary-card">
       <div className="setup-summary-card__header">
@@ -92,17 +98,79 @@ function HobbySummaryCard({ hobby }) {
       </div>
       <div className="setup-summary-card__section">
         <strong>할 일</strong>
-        <p>
-          {hobby.tasks.length > 0 ? hobby.tasks.join(", ") : "아직 정리 전"}
-        </p>
+        {hobby.tasks.length > 0 ? (
+          <div className="setup-edit-list">
+            {hobby.tasks.map((task) => (
+              <button
+                key={task}
+                type="button"
+                className="setup-edit-chip"
+                onClick={() => onRemoveItem(hobby.id, "tasks", task)}
+                aria-label={`${task} 삭제`}
+              >
+                {task} ×
+              </button>
+            ))}
+          </div>
+        ) : (
+          <p>아직 정리 전</p>
+        )}
+        <form
+          className="setup-inline-editor"
+          onSubmit={(event) => {
+            event.preventDefault();
+            const form = event.currentTarget;
+            const value = new FormData(form).get("task");
+            onAddItem(hobby.id, "tasks", value);
+            form.reset();
+          }}
+        >
+          <input
+            name="task"
+            aria-label={`${hobby.name} 할 일 직접 추가`}
+            autoComplete="off"
+            placeholder="예: 크로매틱 5분…"
+          />
+          <button type="submit">추가</button>
+        </form>
       </div>
       <div className="setup-summary-card__section">
         <strong>BGM / 유튜브</strong>
-        <p>
-          {hobby.bgmQueries.length > 0
-            ? hobby.bgmQueries.join(", ")
-            : "아직 정리 전"}
-        </p>
+        {hobby.bgmQueries.length > 0 ? (
+          <div className="setup-edit-list">
+            {hobby.bgmQueries.map((query) => (
+              <button
+                key={query}
+                type="button"
+                className="setup-edit-chip setup-edit-chip--blue"
+                onClick={() => onRemoveItem(hobby.id, "bgmQueries", query)}
+                aria-label={`${query} 삭제`}
+              >
+                {query} ×
+              </button>
+            ))}
+          </div>
+        ) : (
+          <p>아직 정리 전</p>
+        )}
+        <form
+          className="setup-inline-editor"
+          onSubmit={(event) => {
+            event.preventDefault();
+            const form = event.currentTarget;
+            const value = new FormData(form).get("bgm");
+            onAddItem(hobby.id, "bgmQueries", value);
+            form.reset();
+          }}
+        >
+          <input
+            name="bgm"
+            aria-label={`${hobby.name} BGM 직접 추가`}
+            autoComplete="off"
+            placeholder="예: 60fps 메트로놈…"
+          />
+          <button type="submit">추가</button>
+        </form>
       </div>
     </article>
   );
@@ -150,6 +218,28 @@ export default function SetupPage() {
       JSON.stringify(draftHobbies),
     );
     router.push("/");
+  }
+
+  function addManualItem(hobbyId, field, rawValue) {
+    const value = String(rawValue ?? "").trim();
+    if (!value) return;
+    setDraftHobbies((current) =>
+      updateHobbyList(current, hobbyId, (hobby) => {
+        const values = hobby[field] ?? [];
+        return values.includes(value)
+          ? hobby
+          : { ...hobby, [field]: [...values, value] };
+      }),
+    );
+  }
+
+  function removeManualItem(hobbyId, field, value) {
+    setDraftHobbies((current) =>
+      updateHobbyList(current, hobbyId, (hobby) => ({
+        ...hobby,
+        [field]: (hobby[field] ?? []).filter((item) => item !== value),
+      })),
+    );
   }
 
   async function submitConversation(rawContent) {
@@ -250,7 +340,8 @@ export default function SetupPage() {
               <p className="setup-eyebrow">Page 1 · /setup</p>
               <h1>취미 루틴 설정</h1>
               <p className="setup-subtitle">
-                대화하면서 취미, 세부 할 일, BGM을 차근차근 정리해볼게요.
+                AI는 추천과 정리를 돕고, 실제 할 일과 BGM은 오른쪽 요약에서
+                직접 추가하거나 삭제할 수 있어요.
               </p>
             </div>
             <button
@@ -260,6 +351,15 @@ export default function SetupPage() {
             >
               홈으로
             </button>
+          </div>
+
+          <div className="setup-agent-guide">
+            <strong>취미 AI 에이전트는 이렇게 써요</strong>
+            <p>
+              막막할 때만 “기타 연습 추천해줘”처럼 물어보세요. 세부 할 일은
+              오른쪽 카드에서 바로 추가하고, AI는 추천 활동을 더 제안하거나
+              이름을 정리하는 보조 역할만 합니다.
+            </p>
           </div>
 
           <div className="setup-chat-log" data-testid="setup-chat-log">
@@ -320,7 +420,12 @@ export default function SetupPage() {
               data-testid="setup-summary-list"
             >
               {draftHobbies.map((hobby) => (
-                <HobbySummaryCard key={hobby.id} hobby={hobby} />
+                <HobbySummaryCard
+                  key={hobby.id}
+                  hobby={hobby}
+                  onAddItem={addManualItem}
+                  onRemoveItem={removeManualItem}
+                />
               ))}
             </div>
           )}
