@@ -6,8 +6,6 @@ const __dirname = path.dirname(__filename);
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Output standalone bundle for Azure App Service deployment
-  output: "standalone",
   // Fix workspace root detection when nested under a monorepo
   outputFileTracingRoot: path.join(__dirname, "../../"),
 };
