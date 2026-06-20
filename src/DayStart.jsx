@@ -593,8 +593,17 @@ export default function DayStart() {
       {step === 0 && (
         <div className="ds-welcome">
           <div className="ds-emoji">☀️</div>
-          <h1>좋은 아침이에요!</h1>
-          <p>오늘 하루를 계획해볼게요</p>
+          <h1>myroutine</h1>
+          <p>오늘 루틴에 맞는 영상을 골라볼게요</p>
+          <details className="ds-info">
+            <summary aria-label="myroutine 작동 방식 보기">
+              <span aria-hidden="true">i</span>
+            </summary>
+            <p>
+              오늘 일정과 자유시간을 확인한 뒤, AI가 루틴에 맞는 YouTube
+              영상을 추천해요. 선택한 영상이 끝나면 자연스럽게 루틴도 마무리돼요.
+            </p>
+          </details>
           <a className="ds-page-header__link" href="/setup">
             ⚙️ 취미 설정
           </a>

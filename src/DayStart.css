@@ -16,6 +16,7 @@
 
 /* ── Welcome ── */
 .ds-welcome {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -42,7 +43,69 @@
 .ds-welcome p {
   font-size: 1.1rem;
   color: #555;
-  margin-bottom: 2rem;
+  margin-bottom: 1rem;
+}
+
+.ds-info {
+  position: absolute;
+  top: 1.15rem;
+  right: 1.15rem;
+  z-index: 2;
+}
+
+.ds-info summary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid rgba(45, 45, 45, 0.12);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.42);
+  color: rgba(45, 45, 45, 0.52);
+  cursor: pointer;
+  list-style: none;
+  opacity: 0.72;
+  transition:
+    opacity 0.15s,
+    background 0.15s,
+    color 0.15s;
+}
+
+.ds-info[open] summary,
+.ds-info summary:hover,
+.ds-info summary:focus-visible {
+  background: rgba(255, 255, 255, 0.88);
+  color: #ff6b35;
+  opacity: 1;
+}
+
+.ds-info summary::-webkit-details-marker {
+  display: none;
+}
+
+.ds-info summary span {
+  font-family: Georgia, serif;
+  font-size: 1.05rem;
+  font-weight: 700;
+  font-style: italic;
+  line-height: 1;
+}
+
+.ds-info p {
+  position: absolute;
+  top: calc(100% + 0.55rem);
+  right: 0;
+  width: min(320px, 78vw);
+  margin: 0;
+  padding: 0.9rem 1rem;
+  border: 1px solid rgba(255, 107, 53, 0.18);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.94);
+  color: #555;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  box-shadow: 0 12px 28px rgba(82, 51, 24, 0.1);
 }
 
 /* ── Buttons ── */

@@ -1,8 +1,11 @@
 import "./globals.css";
 
 export const metadata = {
-  title: "하루 시작",
-  description: "오늘 자유시간 계산 & 취미 추천",
+  title: "myroutine",
+  description: "오늘 루틴에 맞는 유튜브 영상을 AI가 추천하는 생산성 앱",
+  icons: {
+    icon: "/favicon.svg",
+  },
 };
 
 export default function RootLayout({ children }) {
