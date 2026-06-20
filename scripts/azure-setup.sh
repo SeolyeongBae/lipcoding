@@ -46,7 +46,9 @@ az webapp config appsettings set \
   --settings \
     NODE_ENV=production \
     PORT=8080 \
-    WEBSITE_NODE_DEFAULT_VERSION="~22"
+    WEBSITE_NODE_DEFAULT_VERSION="~22" \
+    SCM_DO_BUILD_DURING_DEPLOYMENT=false \
+    ENABLE_ORYX_BUILD=false
 
 echo "📡 Enabling deployment from GitHub Actions (publish profile)"
 az webapp deployment list-publishing-profiles \
@@ -63,4 +65,3 @@ echo "  3. Delete publish-profile.xml (it contains secrets!)"
 echo "  4. Push to main branch — GitHub Actions will deploy automatically"
 echo ""
 echo "🌍 App URL: https://${APP_NAME}.azurewebsites.net"
-
