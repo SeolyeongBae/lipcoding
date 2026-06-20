@@ -1123,3 +1123,159 @@
     padding: 0.3rem 0.6rem;
   }
 }
+
+/* ── Hobby Detail Panel ── */
+.ds-hobby-panel {
+  margin-top: 1.5rem;
+  background: #fff;
+  border-radius: 16px;
+  padding: 1.25rem;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+  border-top: 4px solid #ff6b35;
+  animation: fadeIn 0.3s ease;
+  scroll-margin-top: 1rem;
+}
+
+.ds-hobby-panel__header {
+  margin-bottom: 1rem;
+}
+
+.ds-hobby-panel__header h3 {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #2d2d2d;
+  margin-bottom: 0.3rem;
+}
+
+.ds-hobby-panel__note {
+  font-size: 0.82rem;
+  color: #888;
+  padding: 0.3rem 0.65rem;
+  background: #f8f8f8;
+  border-radius: 8px;
+  display: inline-block;
+}
+
+/* ── Task picker ── */
+.ds-hobby-panel__tasks {
+  margin-bottom: 1.25rem;
+}
+
+.ds-hobby-panel__tasks-title {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #555;
+  margin-bottom: 0.65rem;
+}
+
+.ds-task-pick-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-bottom: 0.75rem;
+}
+
+.ds-task-pick-item {
+  display: flex;
+}
+
+.ds-task-pick-label {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  cursor: pointer;
+  padding: 0.5rem 0.65rem;
+  background: #fafafa;
+  border-radius: 10px;
+  border: 1.5px solid #f0f0f0;
+  width: 100%;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.ds-task-pick-label:hover {
+  border-color: #ff6b35;
+  background: #fff5f0;
+}
+
+.ds-task-pick-checkbox {
+  width: 18px;
+  height: 18px;
+  accent-color: #ff6b35;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.ds-task-pick-text {
+  font-size: 0.88rem;
+  color: #2d2d2d;
+  line-height: 1.4;
+}
+
+.ds-task-pick-text--checked {
+  font-weight: 600;
+}
+
+/* ── Custom task input ── */
+.ds-task-pick-custom {
+  margin-bottom: 0.75rem;
+}
+
+.ds-task-pick-input {
+  width: 100%;
+  padding: 0.55rem 0.85rem;
+  border: 1.5px solid #e0e0e0;
+  border-radius: 10px;
+  font-size: 0.88rem;
+  color: #2d2d2d;
+  background: #fafafa;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.ds-task-pick-input:focus {
+  border-color: #ff6b35;
+  background: #fff;
+}
+
+.ds-task-pick-input::placeholder {
+  color: #bbb;
+}
+
+/* ── Add tasks button ── */
+.ds-task-add-btn {
+  width: 100%;
+  padding: 0.7rem 1rem;
+  background: #ff6b35;
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s;
+  box-shadow: 0 3px 10px rgba(255, 107, 53, 0.3);
+}
+
+.ds-task-add-btn:hover {
+  background: #e85c2a;
+  transform: translateY(-1px);
+  box-shadow: 0 5px 15px rgba(255, 107, 53, 0.4);
+}
+
+.ds-task-add-btn:active {
+  transform: scale(0.98);
+}
+
+/* ── Videos inside hobby panel ── */
+.ds-hobby-panel__videos {
+  border-top: 1px solid #f0f0f0;
+  padding-top: 1rem;
+}
+
+.ds-hobby-panel__videos-title {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #555;
+  margin-bottom: 0.65rem;
+}
