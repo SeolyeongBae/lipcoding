@@ -1,76 +1,32 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useRef, useEffect } from "react";
+import { DEFAULT_HOBBIES, HOBBIES_STORAGE_KEY, hydrateHobbies } from "./defaultHobbies";
 import "./DayStart.css";
 
-const SWIMMING_WORK_END = { h: 19, m: 30 };
+const TODAY_LOG_KEY = "todayLog";
+
+const DEFAULT_WORK_END = { h: 19, m: 30 };
+const LATEST_WORK_END = { h: 22, m: 0 };
 const SWIMMING_END = { h: 21, m: 30 };
-const WORK_HOURS = 8;
 const MIDNIGHT = { h: 24, m: 0 };
 const COMMUTE_PREP_MIN = 60;
 
-const HOBBIES = [
-  {
-    id: "stretching",
-    name: "🧘 스트레칭 / 명상",
-    queries: ["허벅지 골반 어깨 스트레칭 데일리", "daily office stretching routine"],
-    minMin: 10,
-    fixedMin: 10,
-    note: "딱 10분",
-    showVideos: true, // 따라할 영상 필요
-    tasks: ["허벅지 / 골반 스트레칭", "어깨 스트레칭", "명상 3분"],
-  },
-  {
-    id: "guitar",
-    name: "🎸 기타 연습",
-    queries: ["60fps 메트로놈"],
-    minMin: 10,
-    fixedMin: 30,
-    note: "최대 30분 / 크로매틱 연습",
-    showVideos: false, // 정해진 메트로놈 영상 사용
-    tasks: ["크로매틱 연습 15분", "목표 곡 연습 15분", "코드 전환 연습"],
-  },
-  {
-    id: "drawing",
-    name: "🎨 그림 (드로잉 / 크로키)",
-    queries: ["침착맨 라디오", "비주류 초대석", "drum and bass playlist"],
-    minMin: 30,
-    fixedMin: null,
-    note: "아이패드 드로잉 or 크로키 / BGM 틀어놓고",
-    showVideos: true, // BGM 영상 필요
-    tasks: ["아이패드 드로잉 30분", "크로키 5장", "레퍼런스 수집"],
-  },
-  {
-    id: "study",
-    name: "📚 공부 / 독서",
-    queries: ["빗소리 공부 음악 가사없음", "오케스트라 집중 공부 음악", "rain ambience study music no lyrics"],
-    minMin: 30,
-    fixedMin: null,
-    note: "프로그래머의 뇌 · SW엔지니어링 가이드북 · 쿠버네티스",
-    showVideos: true, // 집중 BGM 필요
-    tasks: ["프로그래머의 뇌 30분 읽기", "노트 정리하기", "쿠버네티스 1장 공부", "SW엔지니어링 가이드북 읽기"],
-  },
-  {
-    id: "movie",
-    name: "🎬 영화",
-    queries: [],
-    minMin: 90,
-    fixedMin: null,
-    note: "위플래쉬 · Boys Before Friends",
-    showVideos: false, // 이미 정해진 영화 시청
-    tasks: ["위플래쉬 보기", "Boys Before Friends 보기"],
-  },
-  {
-    id: "drama",
-    name: "📺 드라마",
-    queries: [],
-    minMin: 30,
-    fixedMin: null,
-    note: "Two Broke Girls · OITNB",
-    showVideos: false, // 이미 정해진 드라마 시청
-    tasks: ["Two Broke Girls 1화 보기", "OITNB 이어보기"],
-  },
-];
+function toRoutineHobby(hobby) {
+  return {
+    ...hobby,
+    queries: hobby.bgmQueries ?? [],
+    showVideos: Boolean(hobby.showVideos && (hobby.bgmQueries?.length ?? 0) > 0),
+  };
+}
+
+function loadRoutineHobbies() {
+  if (typeof window === "undefined") {
+    return DEFAULT_HOBBIES.map(toRoutineHobby);
+  }
+
+  return hydrateHobbies(window.localStorage.getItem(HOBBIES_STORAGE_KEY)).map(toRoutineHobby);
+}
 
 function toMin(h, m) { return h * 60 + m; }
 
@@ -105,39 +61,53 @@ function formatPublishedAt(dateStr) {
   return `${Math.floor(diffDays / 365)}년 전`;
 }
 
-function getWorkStartOptions() {
+function formatTimeLabel(minutes) {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return `${h}시 ${m === 0 ? "정각" : `${m}분`}`;
+}
+
+function getWorkEndOptions() {
   const now = new Date();
   const nowMin = now.getHours() * 60 + now.getMinutes();
   const start = Math.ceil((nowMin + 1) / 30) * 30;
-  const end = toMin(14, 0);
+  const defaultEnd = toMin(DEFAULT_WORK_END.h, DEFAULT_WORK_END.m);
+  const end = toMin(LATEST_WORK_END.h, LATEST_WORK_END.m);
   const opts = [];
-  for (let t = start; t <= end; t += 30) {
-    const h = Math.floor(t / 60), m = t % 60;
-    opts.push({ value: `${pad(h)}:${pad(m)}`, label: `${h}시 ${m === 0 ? "정각" : m + "분"}` });
+
+  for (let t = Math.min(start, defaultEnd); t <= end; t += 30) {
+    if (t <= nowMin) continue;
+    const h = Math.floor(t / 60);
+    const m = t % 60;
+    opts.push({
+      value: `${pad(h)}:${pad(m)}`,
+      label: t === defaultEnd ? `${formatTimeLabel(t)} 보통 마무리` : formatTimeLabel(t),
+    });
   }
+
   return opts;
 }
 
-function calcFreeTime(swimming, workStartStr, isRemote) {
+function calcFreeTime(swimming, workEndStr, isRemote) {
   const now = new Date();
   const nowMin = now.getHours() * 60 + now.getMinutes();
-  const [wh, wm] = workStartStr.split(":").map(Number);
-  const workStartMin = toMin(wh, wm);
-  const commute = isRemote ? 0 : COMMUTE_PREP_MIN;
-  const preEndMin = workStartMin - commute;
-  const pre = Math.max(0, preEndMin - nowMin);
-  const preEndStr = `${pad(Math.floor(preEndMin / 60))}:${pad(preEndMin % 60)}`;
-  const workEndMin = swimming ? toMin(SWIMMING_WORK_END.h, SWIMMING_WORK_END.m) : workStartMin + WORK_HOURS * 60;
-  const postStartMin = swimming ? toMin(SWIMMING_END.h, SWIMMING_END.m) : workEndMin;
+  const [wh, wm] = workEndStr.split(":").map(Number);
+  const workEndMin = toMin(wh, wm);
+  const commuteAfterWork = isRemote ? 0 : COMMUTE_PREP_MIN;
+  const pre = 0;
+  const preEndStr = `${pad(Math.floor(nowMin / 60))}:${pad(nowMin % 60)}`;
+  const swimmingEndMin = toMin(SWIMMING_END.h, SWIMMING_END.m);
+  const postStartMin = swimming
+    ? Math.max(workEndMin, swimmingEndMin)
+    : workEndMin + commuteAfterWork;
   const post = Math.max(0, toMin(MIDNIGHT.h, MIDNIGHT.m) - postStartMin);
   const postStartStr = `${pad(Math.floor(postStartMin / 60))}:${pad(postStartMin % 60)}`;
   const TOTAL = 1440;
   const segments = [];
   if (nowMin > 0) segments.push({ label: "지나간 시간", start: 0, end: nowMin, color: "#e0e0e0" });
-  if (pre > 0) segments.push({ label: "자유시간 ✨", start: nowMin, end: preEndMin, color: "#74b9ff" });
-  if (commute > 0) segments.push({ label: "출근 준비 🏃", start: preEndMin, end: workStartMin, color: "#ffeaa7" });
-  segments.push({ label: "업무 💼", start: workStartMin, end: workEndMin, color: "#fd79a8" });
-  if (swimming) segments.push({ label: "수영 🏊", start: workEndMin, end: toMin(SWIMMING_END.h, SWIMMING_END.m), color: "#81ecec" });
+  segments.push({ label: "업무 💼", start: nowMin, end: Math.max(nowMin, workEndMin), color: "#fd79a8" });
+  if (!isRemote && !swimming) segments.push({ label: "퇴근/정리 🏃", start: workEndMin, end: postStartMin, color: "#ffeaa7" });
+  if (swimming && workEndMin < swimmingEndMin) segments.push({ label: "수영 🏊", start: workEndMin, end: swimmingEndMin, color: "#81ecec" });
   if (post > 0) segments.push({ label: "자유시간 ✨", start: postStartMin, end: toMin(MIDNIGHT.h, MIDNIGHT.m), color: "#74b9ff" });
   const filled = segments.reduce((acc, s) => Math.max(acc, Math.min(s.end, TOTAL)), 0);
   if (filled < TOTAL) segments.push({ label: "수면/기타 😴", start: filled, end: TOTAL, color: "#b2bec3" });
@@ -178,40 +148,50 @@ function Timeline({ segments, nowMin }) {
   );
 }
 
+function getTodayStr() {
+  const d = new Date();
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+function loadTodayLog() {
+  if (typeof window === "undefined") return { date: getTodayStr(), entries: [] };
+  try {
+    const stored = JSON.parse(window.localStorage.getItem(TODAY_LOG_KEY) || "null");
+    if (stored && stored.date === getTodayStr()) return stored;
+  } catch {}
+  return { date: getTodayStr(), entries: [] };
+}
+
+function saveTodayLog(log) {
+  if (typeof window !== "undefined") {
+    window.localStorage.setItem(TODAY_LOG_KEY, JSON.stringify(log));
+  }
+}
+
 export default function DayStart() {
   const [step, setStep] = useState(0);
+  const [hobbies, setHobbies] = useState(() => DEFAULT_HOBBIES.map(toRoutineHobby));
   const [swimming, setSwimming] = useState(null);
-  const [workStart, setWorkStart] = useState(null);
+  const [workEnd, setWorkEnd] = useState(null);
   const [isRemote, setIsRemote] = useState(null);
   const [freeTime, setFreeTime] = useState(null);
   const [selectedHobby, setSelectedHobby] = useState(null);
   const [videos, setVideos] = useState([]);
   const [loadingVideos, setLoadingVideos] = useState(false);
   const [activeQuery, setActiveQuery] = useState(null);
-  const [workStartOptions] = useState(() => getWorkStartOptions());
-
-  // 체크리스트
-  const [todoItems, setTodoItems] = useState([]);
-  const [watchItems, setWatchItems] = useState([]);
-
-  // 취미 패널 task 선택 상태 (체크박스)
-  const [pendingTasks, setPendingTasks] = useState({});
-  const [customTaskInput, setCustomTaskInput] = useState("");
+  const [aiRec, setAiRec] = useState({ text: "", loading: false });
+  const [modalState, setModalState] = useState(null);
+  const [todayLog, setTodayLog] = useState(() => loadTodayLog());
+  const workEndOptions = getWorkEndOptions();
 
   const hobbyPanelRef = useRef(null);
-  const checklistRef = useRef(null);
+  const logRef = useRef(null);
 
-  // 취미 변경 시 task 선택 초기화 (모두 체크된 상태로)
   useEffect(() => {
-    if (selectedHobby) {
-      const init = {};
-      selectedHobby.tasks.forEach((t) => { init[t] = true; });
-      setPendingTasks(init);
-      setCustomTaskInput("");
-    }
-  }, [selectedHobby?.id]);
+    setHobbies(loadRoutineHobbies());
+    setTodayLog(loadTodayLog());
+  }, []);
 
-  // 취미 선택 시 패널로 스크롤
   useEffect(() => {
     if (selectedHobby && hobbyPanelRef.current) {
       setTimeout(() => {
@@ -220,7 +200,7 @@ export default function DayStart() {
     }
   }, [selectedHobby?.id]);
 
-  const fetchVideos = useCallback(async (hobby, query) => {
+  async function fetchVideos(query) {
     setActiveQuery(query);
     setLoadingVideos(true);
     setVideos([]);
@@ -233,17 +213,54 @@ export default function DayStart() {
     } finally {
       setLoadingVideos(false);
     }
-  }, []);
+  }
+
+  async function fetchAiRec(ft, sw, finishTime, remote, hobbyList) {
+    setAiRec({ text: "", loading: true });
+    const hobbyNames = hobbyList.map((h) => h.name).join(", ");
+    const message = `업무 마무리: ${finishTime}. 자유시간: 업무 전 ${formatMin(ft.pre)}, 업무 후 ${formatMin(ft.post)}. 취미: ${hobbyNames}. 오늘 루틴 추천해줘.`;
+    const context = { preMin: ft.pre, postMin: ft.post, workEnd: finishTime, remote, swimming: sw, hobbies: hobbyList };
+    try {
+      const res = await fetch("/api/routine-chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message, context }),
+      });
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = "";
+      let rec = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split("\n");
+        buf = lines.pop() ?? "";
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          try {
+            const evt = JSON.parse(line.slice(6));
+            if (evt.type === "delta") { rec += evt.content; setAiRec({ text: rec, loading: false }); }
+            else if (evt.type === "done") { setAiRec({ text: rec, loading: false }); }
+          } catch {}
+        }
+      }
+    } catch {
+      setAiRec({ text: "", loading: false });
+    }
+  }
 
   const handleSwimming = (val) => { setSwimming(val); setStep(2); };
-  const handleWorkStart = (val) => { setWorkStart(val); setStep(3); };
+  const handleWorkEnd = (val) => { setWorkEnd(val); setStep(3); };
   const handleRemote = (val) => {
     setIsRemote(val);
-    setFreeTime(calcFreeTime(swimming, workStart, val));
+    const ft = calcFreeTime(swimming, workEnd, val);
+    setFreeTime(ft);
     setStep(4);
+    fetchAiRec(ft, swimming, workEnd, val, hobbies);
   };
 
-  const handleHobbySelect = useCallback((hobby) => {
+  function handleHobbySelect(hobby) {
     if (selectedHobby?.id === hobby.id) {
       setSelectedHobby(null);
       setVideos([]);
@@ -252,68 +269,82 @@ export default function DayStart() {
     }
     setSelectedHobby(hobby);
     if (hobby.showVideos && hobby.queries.length > 0) {
-      fetchVideos(hobby, hobby.queries[0]);
+      fetchVideos(hobby.queries[0]);
     } else {
       setVideos([]);
       setActiveQuery(null);
     }
-  }, [selectedHobby, fetchVideos]);
+  }
 
-  // 선택된 task들을 오늘 할 일 목록에 추가
-  const handleAddTasks = () => {
-    const selected = Object.entries(pendingTasks)
-      .filter(([, checked]) => checked)
-      .map(([text]) => text);
+  function handleVideoSelect(video) {
+    setModalState({ video, hobby: selectedHobby });
+  }
 
-    if (selected.length === 0 && !customTaskInput.trim()) return;
-
-    const toAdd = [...selected];
-    if (customTaskInput.trim()) toAdd.push(customTaskInput.trim());
-
-    setTodoItems((prev) => {
-      const existingTexts = new Set(prev.map((t) => t.text));
-      const newItems = toAdd
-        .filter((text) => !existingTexts.has(text))
-        .map((text) => ({ id: `${Date.now()}-${Math.random()}`, text, done: false }));
-      return [...prev, ...newItems];
-    });
-    setCustomTaskInput("");
-    setTimeout(() => {
-      checklistRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 100);
-  };
-
-  const handleTogglePendingTask = (taskText) => {
-    setPendingTasks((prev) => ({ ...prev, [taskText]: !prev[taskText] }));
-  };
-
-  const handleToggleTodo = (id) => setTodoItems((prev) => prev.map((t) => t.id === id ? { ...t, done: !t.done } : t));
-  const handleRemoveTodo = (id) => setTodoItems((prev) => prev.filter((t) => t.id !== id));
-
-  const handleAddToWatch = (video) => {
-    setWatchItems((prev) => prev.some((w) => w.id === video.id) ? prev : [...prev, { ...video, done: false }]);
-    setTimeout(() => {
-      checklistRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 100);
-  };
-  const handleToggleWatch = (id) => setWatchItems((prev) => prev.map((w) => w.id === id ? { ...w, done: !w.done } : w));
-  const handleRemoveWatch = (id) => setWatchItems((prev) => prev.filter((w) => w.id !== id));
+  function handleStartVideo() {
+    if (!modalState) return;
+    const { video, hobby } = modalState;
+    const entry = {
+      hobbyId: hobby.id,
+      videoId: video.id,
+      videoTitle: video.title,
+      videoUrl: video.url,
+      watchedAt: new Date().toISOString(),
+    };
+    const newLog = { ...todayLog, entries: [...todayLog.entries, entry] };
+    setTodayLog(newLog);
+    saveTodayLog(newLog);
+    setModalState(null);
+    setTimeout(() => { logRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }); }, 100);
+  }
 
   const handleReset = () => {
-    setStep(0); setSwimming(null); setWorkStart(null); setIsRemote(null);
+    setStep(0); setSwimming(null); setWorkEnd(null); setIsRemote(null);
     setFreeTime(null); setSelectedHobby(null); setVideos([]); setActiveQuery(null);
-    setTodoItems([]); setWatchItems([]); setPendingTasks({}); setCustomTaskInput("");
+    setAiRec({ text: "", loading: false }); setModalState(null);
   };
 
-  const getRecommended = (availableMin) => HOBBIES.filter((h) => h.minMin <= availableMin);
+  const getRecommended = (availableMin) => hobbies.filter((hobby) => hobby.minMin <= availableMin);
 
   return (
     <div className={`daystart${step === 4 ? " daystart--result" : ""}`}>
+      {/* Video selection modal */}
+      {modalState && (
+        <div
+          role="dialog"
+          aria-label={`${modalState.hobby.name} 영상 시작`}
+          className="ds-modal-overlay"
+          onClick={(e) => e.target === e.currentTarget && setModalState(null)}
+        >
+          <div className="ds-modal">
+            <button className="ds-modal__close" onClick={() => setModalState(null)}>×</button>
+            <h2 className="ds-modal__title">🎬 {modalState.hobby.name}</h2>
+            <p className="ds-modal__video-title">{modalState.video.title}</p>
+            {modalState.video.thumbnail && (
+              <img src={modalState.video.thumbnail} alt={modalState.video.title} className="ds-modal__thumb" />
+            )}
+            <div className="ds-modal__actions">
+              <button className="ds-btn ds-btn--primary" onClick={handleStartVideo}>
+                ✓ 시작하기
+              </button>
+              <a
+                href={modalState.video.url || `https://www.youtube.com/watch?v=${modalState.video.id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="ds-modal__youtube-link"
+              >
+                ▶ YouTube에서 보기
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
+
       {step === 0 && (
         <div className="ds-welcome">
           <div className="ds-emoji">☀️</div>
           <h1>좋은 아침이에요!</h1>
           <p>오늘 하루를 계획해볼게요</p>
+          <a className="ds-page-header__link" href="/setup">⚙️ 취미 설정</a>
           <button className="ds-btn ds-btn--primary" onClick={() => setStep(1)}>하루 시작 🚀</button>
         </div>
       )}
@@ -321,7 +352,7 @@ export default function DayStart() {
       {step === 1 && (
         <div className="ds-step">
           <div className="ds-step__question">🏊 오늘 수영 갈 거야?</div>
-          <div className="ds-step__sub">수영 여부에 따라 퇴근 후 자유시간이 달라져요</div>
+          <div className="ds-step__sub">수영 여부에 따라 업무 후 자유시간이 달라져요</div>
           <div className="ds-choices">
             <button className="ds-choice-btn" onClick={() => handleSwimming(true)}>🏊 응, 갈 거야</button>
             <button className="ds-choice-btn" onClick={() => handleSwimming(false)}>🛋️ 아니, 안 가</button>
@@ -331,15 +362,15 @@ export default function DayStart() {
 
       {step === 2 && (
         <div className="ds-step">
-          <div className="ds-step__question">⏰ 업무 언제 시작할 거야?</div>
-          <div className="ds-step__sub">30분 단위로 선택해줘</div>
+          <div className="ds-step__question">⏰ 업무 언제 마무리할 거야?</div>
+          <div className="ds-step__sub">보통은 19시 30분, 늦으면 22시까지 고를 수 있어요</div>
           <div className="ds-time-grid">
-            {workStartOptions.length > 0 ? (
-              workStartOptions.map((opt) => (
-                <button key={opt.value} className="ds-time-btn" onClick={() => handleWorkStart(opt.value)}>{opt.label}</button>
+            {workEndOptions.length > 0 ? (
+              workEndOptions.map((opt) => (
+                <button key={opt.value} className="ds-time-btn" onClick={() => handleWorkEnd(opt.value)}>{opt.label}</button>
               ))
             ) : (
-              <p style={{ color: "#888", fontSize: "0.9rem" }}>선택 가능한 시간이 없어요 (14시 이후)</p>
+              <p style={{ color: "#888", fontSize: "0.9rem" }}>오늘은 22시 이후라 남은 업무 마무리 선택지가 없어요</p>
             )}
           </div>
         </div>
@@ -367,12 +398,12 @@ export default function DayStart() {
 
           <div className="ds-time-cards">
             <div className="ds-time-card ds-time-card--pre">
-              <div className="ds-time-card__label">☀️ 출근 전</div>
+              <div className="ds-time-card__label">☀️ 업무 전</div>
               <div className="ds-time-card__value">{formatMin(freeTime.pre)}</div>
               <div className="ds-time-card__detail">지금 ~ {freeTime.preEndStr}</div>
             </div>
             <div className="ds-time-card ds-time-card--post">
-              <div className="ds-time-card__label">{swimming ? "🏊 수영 후" : "🌙 퇴근 후"}</div>
+              <div className="ds-time-card__label">{swimming ? "🏊 수영 후" : isRemote ? "🌙 업무 후" : "🌙 퇴근 후"}</div>
               <div className="ds-time-card__value">{formatMin(freeTime.post)}</div>
               <div className="ds-time-card__detail">{freeTime.postStartStr} ~ 자정</div>
             </div>
@@ -382,13 +413,22 @@ export default function DayStart() {
             </div>
           </div>
 
-          {/* ── 취미 선택 버튼 ── */}
+          {/* AI 루틴 추천 */}
+          {(aiRec.loading || aiRec.text) && (
+            <div className="ds-ai-rec">
+              <h3>AI 루틴 추천 ✨</h3>
+              {aiRec.loading && !aiRec.text && <div className="ds-loading">추천 생성 중... 🤔</div>}
+              {aiRec.text && <p className="ds-ai-rec__text">{aiRec.text}</p>}
+            </div>
+          )}
+
+          {/* 취미 선택 버튼 */}
           <div className="ds-hobbies">
             <h3>오늘 뭐 해볼까? 🎯</h3>
 
             {freeTime.pre > 0 && (
               <div className="ds-hobby-section">
-                <div className="ds-hobby-section__title">출근 전 ({formatMin(freeTime.pre)} 있어요)</div>
+                <div className="ds-hobby-section__title">업무 전 ({formatMin(freeTime.pre)} 있어요)</div>
                 <div className="ds-hobby-grid">
                   {getRecommended(freeTime.pre).length > 0 ? (
                     getRecommended(freeTime.pre).map((h) => (
@@ -411,7 +451,7 @@ export default function DayStart() {
             {freeTime.post > 0 && (
               <div className="ds-hobby-section">
                 <div className="ds-hobby-section__title">
-                  {swimming ? "수영 후" : "퇴근 후"} ({formatMin(freeTime.post)} 있어요)
+                  {swimming ? "수영 후" : isRemote ? "업무 후" : "퇴근 후"} ({formatMin(freeTime.post)} 있어요)
                 </div>
                 <div className="ds-hobby-grid">
                   {getRecommended(freeTime.post).map((h) => (
@@ -429,7 +469,7 @@ export default function DayStart() {
             )}
           </div>
 
-          {/* ── 취미 상세 패널 ── */}
+          {/* 취미 상세 패널 */}
           {selectedHobby && (
             <div className="ds-hobby-panel" ref={hobbyPanelRef}>
               <div className="ds-hobby-panel__header">
@@ -437,58 +477,26 @@ export default function DayStart() {
                 {selectedHobby.note && <div className="ds-hobby-panel__note">📝 {selectedHobby.note}</div>}
               </div>
 
-              {/* Task 선택 */}
               <div className="ds-hobby-panel__tasks">
-                <div className="ds-hobby-panel__tasks-title">오늘 할 것 골라봐 ✅</div>
-                <ul className="ds-task-pick-list">
+                <div className="ds-hobby-panel__tasks-title">이번에 해볼 것</div>
+                <ul className="ds-task-list">
                   {selectedHobby.tasks.map((task) => (
-                    <li key={task} className="ds-task-pick-item">
-                      <label className="ds-task-pick-label">
-                        <input
-                          type="checkbox"
-                          className="ds-task-pick-checkbox"
-                          checked={!!pendingTasks[task]}
-                          onChange={() => handleTogglePendingTask(task)}
-                        />
-                        <span className={`ds-task-pick-text${pendingTasks[task] ? " ds-task-pick-text--checked" : ""}`}>
-                          {task}
-                        </span>
-                      </label>
-                    </li>
+                    <li key={task} className="ds-task-item">• {task}</li>
                   ))}
                 </ul>
-
-                {/* 직접 입력 */}
-                <div className="ds-task-pick-custom">
-                  <input
-                    className="ds-task-pick-input"
-                    type="text"
-                    placeholder="직접 입력..."
-                    value={customTaskInput}
-                    onChange={(e) => setCustomTaskInput(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && handleAddTasks()}
-                  />
-                </div>
-
-                <button className="ds-task-add-btn" onClick={handleAddTasks}>
-                  ✓ 오늘 할 일에 추가
-                </button>
               </div>
 
-              {/* 유튜브 영상 (showVideos인 경우만) */}
               {selectedHobby.showVideos && (
                 <div className="ds-hobby-panel__videos">
-                  <div className="ds-hobby-panel__videos-title">
-                    📺 {selectedHobby.showVideos && selectedHobby.queries.length > 1 ? "BGM / 참고 영상" : "참고 영상"}
-                  </div>
+                  <div className="ds-hobby-panel__videos-title">📺 BGM / 참고 영상</div>
 
-                  {selectedHobby.queries.length > 1 && (
+                  {selectedHobby.queries.length >= 1 && (
                     <div className="ds-videos__tabs">
                       {selectedHobby.queries.map((q, i) => (
                         <button
                           key={i}
                           className={`ds-videos__tab${activeQuery === q ? " ds-videos__tab--active" : ""}`}
-                          onClick={() => fetchVideos(selectedHobby, q)}
+                          onClick={() => fetchVideos(q)}
                         >
                           {q}
                         </button>
@@ -501,42 +509,34 @@ export default function DayStart() {
                   {!loadingVideos && videos.length > 0 && (
                     <div className="ds-video-grid">
                       {videos.map((v) => {
-                        const isInWatch = watchItems.some((w) => w.id === v.id);
                         const viewStr = formatViewCount(v.viewCount);
                         const dateStr = formatPublishedAt(v.publishedAt);
                         return (
-                          <div key={v.id} className="ds-video-card">
-                            <a
-                              href={v.url || `https://www.youtube.com/watch?v=${v.id}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="ds-video-link"
-                            >
+                          <button
+                            key={v.id}
+                            className="ds-video-card"
+                            onClick={() => handleVideoSelect(v)}
+                          >
+                            {v.thumbnail && (
                               <img src={v.thumbnail} alt={v.title} className="ds-video-thumb" />
-                              <div className="ds-video-info">
-                                <div className="ds-video-title">{v.title}</div>
-                                <div className="ds-video-channel">{v.channel}</div>
-                                {(viewStr || dateStr) && (
-                                  <div className="ds-video-meta">
-                                    {viewStr && <span className="ds-video-views">👁 {viewStr}</span>}
-                                    {dateStr && <span className="ds-video-date">📅 {dateStr}</span>}
-                                  </div>
-                                )}
-                              </div>
-                            </a>
-                            <button
-                              className={`ds-video-add-btn${isInWatch ? " ds-video-add-btn--added" : ""}`}
-                              onClick={() => isInWatch ? handleRemoveWatch(v.id) : handleAddToWatch(v)}
-                            >
-                              {isInWatch ? "✓ 추가됨" : "+ 담기"}
-                            </button>
-                          </div>
+                            )}
+                            <div className="ds-video-info">
+                              <div className="ds-video-title">{v.title}</div>
+                              <div className="ds-video-channel">{v.channel}</div>
+                              {(viewStr || dateStr) && (
+                                <div className="ds-video-meta">
+                                  {viewStr && <span className="ds-video-views">👁 {viewStr}</span>}
+                                  {dateStr && <span className="ds-video-date">📅 {dateStr}</span>}
+                                </div>
+                              )}
+                            </div>
+                          </button>
                         );
                       })}
                     </div>
                   )}
 
-                  {!loadingVideos && videos.length === 0 && !loadingVideos && (
+                  {!loadingVideos && videos.length === 0 && (
                     <div className="ds-loading">영상을 불러올 수 없어요 😢</div>
                   )}
                 </div>
@@ -544,64 +544,24 @@ export default function DayStart() {
             </div>
           )}
 
-          {/* ── 체크리스트 ── */}
-          <div className="ds-checklist" ref={checklistRef}>
-            <h3>오늘의 체크리스트 ✅</h3>
-
-            {/* 오늘 하고 싶은 일 */}
-            <div className="ds-checklist__section">
-              <div className="ds-checklist__section-title">📌 오늘 하고 싶은 일</div>
-              {todoItems.length === 0 ? (
-                <div className="ds-checklist__empty">
-                  취미 패널에서 할 일을 선택해서 추가해요 👆
-                </div>
-              ) : (
-                <ul className="ds-checklist__list">
-                  {todoItems.map((item) => (
-                    <li key={item.id} className={`ds-checklist__item${item.done ? " ds-checklist__item--done" : ""}`}>
-                      <button className="ds-checklist__check" onClick={() => handleToggleTodo(item.id)}>
-                        {item.done ? "✓" : ""}
-                      </button>
-                      <span className="ds-checklist__text">{item.text}</span>
-                      <button className="ds-checklist__remove" onClick={() => handleRemoveTodo(item.id)}>×</button>
+          {/* 오늘의 기록 */}
+          <div className="ds-today-log" data-testid="today-log" ref={logRef}>
+            <h3>오늘의 기록 📝</h3>
+            {todayLog.entries.length === 0 ? (
+              <p className="ds-today-log__empty">아직 기록이 없어요. 영상을 선택해 시작해봐요!</p>
+            ) : (
+              <ul className="ds-today-log__list">
+                {todayLog.entries.map((entry, i) => {
+                  const hobby = hobbies.find((h) => h.id === entry.hobbyId);
+                  return (
+                    <li key={i} className="ds-today-log__item">
+                      <span className="ds-today-log__hobby">{hobby?.name ?? entry.hobbyId}</span>
+                      <span className="ds-today-log__video">{entry.videoTitle}</span>
                     </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-
-            {/* 오늘 보고 싶은 영상 */}
-            <div className="ds-checklist__section">
-              <div className="ds-checklist__section-title">🎬 오늘 보고 싶은 영상</div>
-              {watchItems.length === 0 ? (
-                <div className="ds-checklist__empty">
-                  영상 카드의 <strong>+ 담기</strong> 버튼으로 추가해요 👆
-                </div>
-              ) : (
-                <ul className="ds-checklist__list">
-                  {watchItems.map((item) => (
-                    <li key={item.id} className={`ds-checklist__item ds-checklist__item--video${item.done ? " ds-checklist__item--done" : ""}`}>
-                      <button className="ds-checklist__check" onClick={() => handleToggleWatch(item.id)}>
-                        {item.done ? "✓" : ""}
-                      </button>
-                      {item.thumbnail && (
-                        <img src={item.thumbnail} alt={item.title} className="ds-checklist__thumb" />
-                      )}
-                      <a
-                        href={item.url || `https://www.youtube.com/watch?v=${item.id}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="ds-checklist__video-info"
-                      >
-                        <span className="ds-checklist__video-title">{item.title}</span>
-                        <span className="ds-checklist__video-channel">{item.channel}</span>
-                      </a>
-                      <button className="ds-checklist__remove" onClick={() => handleRemoveWatch(item.id)}>×</button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
+                  );
+                })}
+              </ul>
+            )}
           </div>
         </div>
       )}
