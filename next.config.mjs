@@ -6,7 +6,7 @@ const __dirname = path.dirname(__filename);
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Fix workspace root detection when nested under a monorepo
+  output: "standalone",
   outputFileTracingRoot: path.join(__dirname, "../../"),
 };
 
