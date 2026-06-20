@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { useWeatherChat } from "./hooks/useWeatherChat";
-import "./App.css";
+import "./WeatherAssistant.css";
 
 const SUGGESTIONS = [
   "What's the weather in Seoul?",
