@@ -60,7 +60,7 @@ jobs:
           PUBLISH_PASS: ${{ secrets.AZURE_PUBLISH_PASS }}
         run: |
           curl -X POST \
-            "https://lipcoding-app-svc.scm.azurewebsites.net/api/zipdeploy?isAsync=false" \
+            "https://lipcoding-app-svc.scm.azurewebsites.net/api/zipdeploy?isAsync=false&clean=true" \
             --user "${PUBLISH_USER}:${PUBLISH_PASS}" \
             -H "Content-Type: application/octet-stream" \
             --data-binary @deploy.zip \
