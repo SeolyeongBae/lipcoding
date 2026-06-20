@@ -40,7 +40,15 @@ jobs:
         run: |
           cp -r public .next/standalone/public || true
           cp -r .next/static .next/standalone/.next/static || true
+          mkdir -p .next/standalone/.next/server
+          if [ -d .next/server/chunks ]; then
+            cp -r .next/server/chunks .next/standalone/.next/server/chunks
+          fi
+          if [ -d .next/server/vendor-chunks ]; then
+            cp -r .next/server/vendor-chunks .next/standalone/.next/server/vendor-chunks
+          fi
           test -f .next/standalone/server.js
+          test -d .next/standalone/.next/server/chunks
           # Add package.json with start script so Oryx detects this as Node.js
           echo '{"name":"app","version":"1.0.0","scripts":{"start":"node server.js"}}' \
             > .next/standalone/package.json
