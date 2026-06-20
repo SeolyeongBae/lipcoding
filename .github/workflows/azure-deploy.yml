@@ -54,6 +54,21 @@ jobs:
             > .next/standalone/package.json
           cd .next/standalone && zip -r ../../deploy.zip .
 
+      - name: Remove stale Oryx artifacts from Azure
+        env:
+          PUBLISH_USER: ${{ secrets.AZURE_PUBLISH_USER }}
+          PUBLISH_PASS: ${{ secrets.AZURE_PUBLISH_PASS }}
+        run: |
+          for path in node_modules.tar.gz oryx-manifest.toml _del_node_modules; do
+            curl -X DELETE \
+              "https://lipcoding-app-svc.scm.azurewebsites.net/api/vfs/site/wwwroot/${path}" \
+              --user "${PUBLISH_USER}:${PUBLISH_PASS}" \
+              -H "If-Match: *" \
+              --silent \
+              --show-error \
+              --output /dev/null || true
+          done
+
       - name: Deploy to Azure Web App via Kudu ZipDeploy
         env:
           PUBLISH_USER: ${{ secrets.AZURE_PUBLISH_USER }}
